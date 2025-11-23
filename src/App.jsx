@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Printer, 
   Plus, 
@@ -8,7 +8,10 @@ import {
   Lightbulb, 
   Signpost, 
   TreePine, 
-  Briefcase 
+  Briefcase,
+  Save,
+  FolderOpen,
+  FileText
 } from 'lucide-react';
 
 // ============================================================================
@@ -100,7 +103,7 @@ export default function App() {
     companyAddress: "1521 Syracuse St, Denver, CO 80220",
     companyPhone: "303 434 4595",
     companyEmail: "pat@patryan.com",
-    logoUrl: "https://placehold.co/72x72/0A6EBD/FFFFFF?text=DSG", // Placeholder logo URL
+    logoUrl: "src/assets/PRThingsTempLogo.png", // Placeholder logo URL
   });
 
   /**
@@ -182,6 +185,48 @@ export default function App() {
     }
   ]);
 
+  /**
+   * File Handle State
+   * Stores the file system handle for save operations (File System Access API).
+   * Allows re-saving to the same file without showing the save dialog again.
+   */
+  const [fileHandle, setFileHandle] = useState(null);
+
+  /**
+   * Unsaved Changes State
+   * Tracks whether the document has unsaved changes to prompt user before closing.
+   */
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // ============================================================================
+  // EFFECT HOOKS
+  // ============================================================================
+
+  /**
+   * Track Changes Effect
+   * Marks document as having unsaved changes whenever state updates.
+   * Ignores initial render by checking if this is the first update.
+   */
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [projectInfo, categories]);
+
+  /**
+   * Unsaved Changes Warning
+   * Warns user before leaving page if there are unsaved changes.
+   */
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   // ============================================================================
   // UTILITY FUNCTIONS & CALCULATIONS
   // ============================================================================
@@ -236,6 +281,223 @@ export default function App() {
     return { categoryTotals, grandTotal, tax, totalWithTax, variance };
   }, [categories, projectInfo.allowance, projectInfo.salesTaxRate]);
 
+
+  // ============================================================================
+  // FILE MANAGEMENT FUNCTIONS
+  // ============================================================================
+
+  /**
+   * Create New Document
+   * Resets all state to default values for a fresh document.
+   * Prompts user if there are unsaved changes.
+   */
+  const handleNewDocument = () => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        'You have unsaved changes. Are you sure you want to create a new document?'
+      );
+      if (!confirmed) return;
+    }
+
+    // Reset to default state
+    setProjectInfo({
+      name: "Project Name",
+      address: "project address goes here, city, state, zip code",
+      date: new Date().toISOString().split('T')[0],
+      client: "Development Group LLC",
+      allowance: 750000,
+      salesTaxRate: 10.25,
+      companyName: "Pat Ryan Things LLC.",
+      companyAddress: "1521 Syracuse St, Denver, CO 80220",
+      companyPhone: "303 434 4595",
+      companyEmail: "pat@patryan.com",
+      logoUrl: "src/assets/PRThingsTempLogo.png",
+    });
+
+    setCategories([
+      {
+        id: 'foh',
+        title: 'Front of House | Furniture & Equipment',
+        icon: Armchair,
+        color: 'text-blue-600',
+        items: [
+          { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', notes: '' }
+        ]
+      }
+    ]);
+
+    setFileHandle(null);
+    setHasUnsavedChanges(false);
+  };
+
+  /**
+   * Save Document
+   * Saves the current document state to a JSON file.
+   * Uses File System Access API for native save dialog.
+   * If file was previously saved, updates the same file.
+   */
+  const handleSave = async () => {
+    try {
+      let handle = fileHandle;
+
+      // If no file handle exists, prompt for save location (Save As)
+      if (!handle) {
+        const projectName = projectInfo.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        handle = await window.showSaveFilePicker({
+          suggestedName: `${projectName}_budget.ffe`,
+          types: [
+            {
+              description: 'FFE Budget Files',
+              accept: { 'application/json': ['.ffe'] }
+            }
+          ]
+        });
+        setFileHandle(handle);
+      }
+
+      // Prepare document data (serialize categories by removing icon functions)
+      const documentData = {
+        version: '1.0',
+        savedAt: new Date().toISOString(),
+        projectInfo,
+        categories: categories.map(cat => ({
+          id: cat.id,
+          title: cat.title,
+          color: cat.color,
+          items: cat.items
+        }))
+      };
+
+      // Write to file
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(documentData, null, 2));
+      await writable.close();
+
+      setHasUnsavedChanges(false);
+      alert('Document saved successfully!');
+    } catch (error) {
+      // User cancelled or error occurred
+      if (error.name !== 'AbortError') {
+        console.error('Save error:', error);
+        alert('Failed to save document. Please try again.');
+      }
+    }
+  };
+
+  /**
+   * Save As Document
+   * Forces a save dialog even if file handle exists.
+   * Allows user to save to a different location/name.
+   */
+  const handleSaveAs = async () => {
+    try {
+      const projectName = projectInfo.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `${projectName}_budget.ffe`,
+        types: [
+          {
+            description: 'FFE Budget Files',
+            accept: { 'application/json': ['.ffe'] }
+          }
+        ]
+      });
+
+      setFileHandle(handle);
+
+      // Prepare document data
+      const documentData = {
+        version: '1.0',
+        savedAt: new Date().toISOString(),
+        projectInfo,
+        categories: categories.map(cat => ({
+          id: cat.id,
+          title: cat.title,
+          color: cat.color,
+          items: cat.items
+        }))
+      };
+
+      // Write to file
+      const writable = await handle.createWritable();
+      await writable.write(JSON.stringify(documentData, null, 2));
+      await writable.close();
+
+      setHasUnsavedChanges(false);
+      alert('Document saved successfully!');
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Save As error:', error);
+        alert('Failed to save document. Please try again.');
+      }
+    }
+  };
+
+  /**
+   * Open Document
+   * Opens and loads a previously saved FFE budget file.
+   * Uses File System Access API for native open dialog.
+   * Reconstructs category icons and colors from saved data.
+   */
+  const handleOpen = async () => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        'You have unsaved changes. Are you sure you want to open a different document?'
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      // Show file picker
+      const [handle] = await window.showOpenFilePicker({
+        types: [
+          {
+            description: 'FFE Budget Files',
+            accept: { 'application/json': ['.ffe'] }
+          }
+        ],
+        multiple: false
+      });
+
+      // Read file contents
+      const file = await handle.getFile();
+      const contents = await file.text();
+      const documentData = JSON.parse(contents);
+
+      // Validate document structure
+      if (!documentData.projectInfo || !documentData.categories) {
+        throw new Error('Invalid file format');
+      }
+
+      // Icon mapping for reconstructing categories
+      const iconMap = {
+        'foh': { icon: Armchair, color: 'text-blue-600' },
+        'custom': { icon: Lightbulb, color: 'text-amber-600' },
+        'wayfinding': { icon: Signpost, color: 'text-purple-600' },
+        'exterior': { icon: TreePine, color: 'text-emerald-600' },
+        'fees': { icon: Briefcase, color: 'text-gray-600' }
+      };
+
+      // Reconstruct categories with icons
+      const loadedCategories = documentData.categories.map(cat => ({
+        ...cat,
+        icon: iconMap[cat.id]?.icon || Layout,
+        color: cat.color || iconMap[cat.id]?.color || 'text-gray-600'
+      }));
+
+      // Load data into state
+      setProjectInfo(documentData.projectInfo);
+      setCategories(loadedCategories);
+      setFileHandle(handle);
+      setHasUnsavedChanges(false);
+
+      alert('Document loaded successfully!');
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Open error:', error);
+        alert('Failed to open document. Please ensure it is a valid FFE budget file.');
+      }
+    }
+  };
 
   // ============================================================================
   // EVENT HANDLERS
@@ -331,12 +593,19 @@ export default function App() {
    */
   const removeItem = (catId, itemId) => {
     // Log removal action for audit trail
-    console.log(`Removing item ${itemId} from category ${catId}`);
+    console.log(`Attempting to remove item ${itemId} from category ${catId}`);
+    console.log('Current categories:', categories);
     
-    setCategories(prev => prev.map(cat => {
-      if (cat.id !== catId) return cat;
-      return { ...cat, items: cat.items.filter(item => item.id !== itemId) };
-    }));
+    setCategories(prev => {
+      const updated = prev.map(cat => {
+        if (cat.id !== catId) return cat;
+        const filtered = { ...cat, items: cat.items.filter(item => item.id !== itemId) };
+        console.log(`Filtered items for category ${catId}:`, filtered.items.length);
+        return filtered;
+      });
+      console.log('Updated categories:', updated);
+      return updated;
+    });
   };
 
   /**
@@ -356,19 +625,55 @@ export default function App() {
     <div className="min-h-screen bg-gray-100 font-sans text-gray-800 print:bg-white pb-20">
       
       {/* ===== TOP NAVIGATION BAR ===== */}
-      {/* Hidden when printing, provides app branding and print functionality */}
+      {/* Hidden when printing, provides app branding and file/print functionality */}
       <div className="bg-slate-900 text-white shadow-lg print:hidden">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Layout className="text-blue-400" />
-            <h1 className="text-xl font-bold tracking-tight">Hospitality FF&E Manager</h1>
+            <h1 className="text-xl font-bold tracking-tight">
+              Hospitality FF&E Manager
+              {hasUnsavedChanges && <span className="text-yellow-400 ml-2">*</span>}
+            </h1>
           </div>
-          <button 
-            onClick={handlePrint}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition px-4 py-2 rounded-md text-sm font-semibold"
-          >
-            <Printer size={16} /> Print / Save PDF
-          </button>
+          
+          {/* File Management & Print Buttons */}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleNewDocument}
+              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
+              title="New Document"
+            >
+              <FileText size={16} /> New
+            </button>
+            <button 
+              onClick={handleOpen}
+              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
+              title="Open Document"
+            >
+              <FolderOpen size={16} /> Open
+            </button>
+            <button 
+              onClick={handleSave}
+              className="flex items-center gap-2 bg-green-700 hover:bg-green-600 transition px-3 py-2 rounded-md text-sm font-semibold"
+              title="Save Document"
+            >
+              <Save size={16} /> Save
+            </button>
+            <button 
+              onClick={handleSaveAs}
+              className="flex items-center gap-2 bg-green-700 hover:bg-green-600 transition px-3 py-2 rounded-md text-sm font-semibold"
+              title="Save As..."
+            >
+              <Save size={16} /> Save As
+            </button>
+            <div className="w-px h-8 bg-gray-600 mx-1"></div>
+            <button 
+              onClick={handlePrint}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition px-4 py-2 rounded-md text-sm font-semibold"
+            >
+              <Printer size={16} /> Print / Save PDF
+            </button>
+          </div>
         </div>
       </div>
 
@@ -541,21 +846,21 @@ export default function App() {
                 />
                 
                 {/* Line Items Table */}
-                {/* Responsive table with inline editing for all item fields */}
+                {/* Responsive table with inline editing and dynamic column widths */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table style={{ width: '100%', fontSize: '14px', tableLayout: 'auto', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr className="bg-gray-50 text-gray-500 border-b border-gray-100 uppercase text-xs tracking-wider font-semibold">
-                        <th className="px-4 py-3 w-10">#</th>
-                        <th className="px-4 py-3 w-32">Manufacturer</th>
-                        <th className="px-4 py-3">Description</th>
-                        <th className="px-4 py-3 w-32">Dimensions</th>
-                        <th className="px-4 py-3 w-24">Lead Time</th>
-                        <th className="px-4 py-3 w-20 text-center">Qty</th>
-                        <th className="px-4 py-3 w-28 text-right">Unit Price</th>
-                        <th className="px-4 py-3 w-28 text-right">Total</th>
-                        <th className="px-4 py-3 w-40">Notes</th>
-                        <th className="px-4 py-3 w-10 print:hidden"></th>
+                      <tr style={{ backgroundColor: '#f9fafb', color: '#6b7280', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase' }}>
+                        <th style={{ padding: '12px 16px', width: '40px', textAlign: 'left' }}>#</th>
+                        <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Manufacturer</th>
+                        <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
+                        <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>
+                        <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>
+                        <th style={{ padding: '12px 16px', width: '60px', textAlign: 'center' }}>Qty</th>
+                        <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>
+                        <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>
+                        <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>
+                        <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -565,21 +870,52 @@ export default function App() {
                           {/* Row number (1-indexed for user readability) */}
                           <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
                           {/* Manufacturer/Vendor field */}
-                          <td className="px-4 py-2">
-                            <input 
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 font-medium text-gray-900 placeholder-gray-300"
+                          <td style={{ padding: '8px 16px' }}>
+                            <textarea 
+                              style={{ 
+                                width: '100%', 
+                                minHeight: '32px',
+                                backgroundColor: 'transparent', 
+                                border: '1px solid transparent', 
+                                borderRadius: '4px',
+                                padding: '4px',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                color: '#111827',
+                                resize: 'vertical',
+                                fontFamily: 'inherit',
+                                lineHeight: '1.5'
+                              }}
                               value={item.mfr}
                               onChange={(e) => updateItem(category.id, item.id, 'mfr', e.target.value)}
                               placeholder="Mfr Name"
+                              rows={1}
+                              onFocus={(e) => e.target.style.border = '1px solid #3b82f6'}
+                              onBlur={(e) => e.target.style.border = '1px solid transparent'}
                             />
                           </td>
                           {/* Item description field */}
-                          <td className="px-4 py-2">
-                            <input 
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-900 placeholder-gray-300"
+                          <td style={{ padding: '8px 16px' }}>
+                            <textarea 
+                              style={{ 
+                                width: '100%', 
+                                minHeight: '32px',
+                                backgroundColor: 'transparent', 
+                                border: '1px solid transparent', 
+                                borderRadius: '4px',
+                                padding: '4px',
+                                fontSize: '14px',
+                                color: '#111827',
+                                resize: 'vertical',
+                                fontFamily: 'inherit',
+                                lineHeight: '1.5'
+                              }}
                               value={item.desc}
                               onChange={(e) => updateItem(category.id, item.id, 'desc', e.target.value)}
                               placeholder="Item Description"
+                              rows={1}
+                              onFocus={(e) => e.target.style.border = '1px solid #3b82f6'}
+                              onBlur={(e) => e.target.style.border = '1px solid transparent'}
                             />
                           </td>
                           {/* Dimensions field */}
@@ -634,12 +970,37 @@ export default function App() {
                               placeholder="Finish / Note"
                             />
                           </td>
-                          {/* Delete button - appears on hover, hidden when printing */}
-                          <td className="px-4 py-2 text-center print:hidden opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Delete button - subtle trash icon, hidden when printing */}
+                          <td style={{ 
+                            padding: '8px', 
+                            textAlign: 'center', 
+                            display: 'table-cell'
+                          }}>
                             <button 
-                              onClick={() => removeItem(category.id, item.id)}
-                              className="text-gray-400 hover:text-red-500 transition"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                removeItem(category.id, item.id);
+                              }}
                               aria-label="Delete item"
+                              title="Delete this item"
+                              type="button"
+                              style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '4px',
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer',
+                                color: '#9ca3af'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#ef4444';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#9ca3af';
+                              }}
                             >
                               <Trash2 size={16} />
                             </button>
@@ -650,12 +1011,26 @@ export default function App() {
                   </table>
                 </div>
                 
-                {/* Add Item Button - Hidden when printing */}
-                <div className="bg-gray-50 p-3 border-t border-gray-100 print:hidden">
+                {/* Add Item Button - Visible in browser, hidden when printing */}
+                <div style={{ backgroundColor: '#f9fafb', padding: '12px', borderTop: '1px solid #e5e7eb', display: 'block' }}>
                   <button 
                     onClick={() => addItem(category.id)}
-                    className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition px-2 py-1 rounded"
                     aria-label={`Add item to ${category.title}`}
+                    style={{ 
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#2563eb',
+                      padding: '4px 8px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      borderRadius: '4px'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#1e40af'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#2563eb'}
                   >
                     <Plus size={16} /> Add {category.title.split('|')[0]} Item
                   </button>
@@ -690,47 +1065,68 @@ export default function App() {
       {/* Inline styles for print media - controls page layout, margins, and footer content */}
       <style>{`
         @media print {
-          /* Configure print page settings with margins and automatic footer content */}
+          /* Configure print page settings with margins and automatic footer content */
           @page {
-              size: A4 portrait;
-              margin: 2.54cm 1.5cm 2.54cm 1.5cm; /* T R B L margins */
+              size: A4 landscape;
+              margin: 1.5cm 1.5cm 1.5cm 1.5cm;
 
-              /* Page Numbering: Centered at the bottom */
               @bottom-center {
                   content: "Page " counter(page) " of " counter(pages);
                   font-size: 10pt;
-                  color: #6b7280; /* text-gray-500 */
-                  border-top: 1px solid #e5e7eb; /* border-gray-200 */
+                  color: #6b7280;
+                  border-top: 1px solid #e5e7eb;
                   padding-top: 5pt;
               }
               
-              /* Project Name: Bottom Left */
               @bottom-left {
                   content: "Project: ${projectInfo.name}";
                   font-size: 10pt;
-                  color: #1f2937; /* text-gray-800 */
+                  color: #1f2937;
                   font-weight: bold;
               }
 
-              /* Date: Bottom Right */
               @bottom-right {
                   content: "Date: ${projectInfo.date}";
                   font-size: 10pt;
-                  color: #6b7280; /* text-gray-500 */
+                  color: #6b7280;
               }
           }
           
-          body { -webkit-print-color-adjust: exact; }
-          .print\\:hidden { display: none !important; }
-          .print\\:shadow-none { box-shadow: none !important; }
-          .print\\:border-none { border: none !important; }
-          .print\\:bg-white { background-color: white !important; }
-          input, textarea { border: none !important; padding: 0 !important; }
+          body { 
+            -webkit-print-color-adjust: exact; 
+          }
+          
+          .print\\:hidden { 
+            display: none !important; 
+          }
+          
+          .print\\:shadow-none { 
+            box-shadow: none !important; 
+          }
+          
+          .print\\:border-none { 
+            border: none !important; 
+          }
+          
+          .print\\:bg-white { 
+            background-color: white !important; 
+          }
+          
+          input, textarea { 
+            border: none !important; 
+            padding: 0 !important; 
+          }
           
           input[type="number"]::-webkit-inner-spin-button, 
           input[type="number"]::-webkit-outer-spin-button { 
             -webkit-appearance: none; 
             margin: 0; 
+          }
+          
+          /* Hide delete column and add buttons */
+          table thead th:last-child,
+          table tbody td:last-child {
+            display: none !important;
           }
         }
       `}</style>

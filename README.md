@@ -16,6 +16,13 @@ A modern, interactive web application for managing Furniture, Fixtures, and Equi
 - Customizable company branding (logo, name, address, contact info)
 - Professional document formatting for client presentations
 
+### 💾 Save & Load Documents
+- **Save to local filesystem** with native file picker dialog
+- **Reopen saved documents** for continued editing
+- **Automatic unsaved changes detection** with warning prompts
+- **Custom .ffe file format** (JSON-based) for easy portability
+- **Save As functionality** to create copies with different names/locations
+
 ### 🖨️ Print & Export
 - **Print-optimized layout** with automatic page formatting
 - **Professional PDF generation** via browser print dialog
@@ -96,10 +103,33 @@ npm run dev
    - Ensure "Background graphics" is enabled for proper styling
 3. Save or print the document
 
+### Saving & Loading Documents
+1. **Creating a New Document**:
+   - Click the "New" button in the top navigation
+   - System will warn if you have unsaved changes
+   - Document resets to default template
+
+2. **Saving Your Work**:
+   - Click "Save" to save to the current file (or choose location if first save)
+   - Click "Save As" to save to a new location/filename
+   - Files are saved with .ffe extension (JSON format)
+   - Yellow asterisk (*) indicates unsaved changes
+
+3. **Opening Saved Documents**:
+   - Click "Open" button in the top navigation
+   - Browse to your .ffe file
+   - System will warn if current document has unsaved changes
+   - Document loads with all project data preserved
+
+4. **File Format**:
+   - Files use .ffe extension (FFE Budget Files)
+   - JSON format for easy data portability
+   - Can be saved to any folder on your computer
+
 ### Customizing Company Branding
 - Edit company name, address, phone, and email in the header section
 - Update logo URL in the code or replace with your own hosted image
-- All changes persist during the session
+- All changes persist when you save the document
 
 ## Project Structure
 
@@ -137,6 +167,10 @@ FFE-Hospitality-Budget-Manager/
 - `updateItem()` - Updates line items with input validation
 - `addItem()` - Adds new line items to categories
 - `removeItem()` - Removes line items from categories
+- `handleNewDocument()` - Creates new document with confirmation
+- `handleSave()` - Saves document using File System Access API
+- `handleSaveAs()` - Saves document to new location
+- `handleOpen()` - Opens saved .ffe files with validation
 
 ## Input Validation
 
@@ -179,10 +213,18 @@ Update the initial state values in `useState` declarations within `App.jsx`.
 - Inline styles for print media avoid CSS file bloat
 - Minimal re-renders through proper React patterns
 
+## Browser Requirements
+
+The save/load functionality uses the **File System Access API**, which requires:
+- Chrome/Edge 86+ (recommended)
+- Opera 72+
+- **Not supported**: Firefox, Safari (as of Nov 2025)
+
+For unsupported browsers, the save/load buttons will attempt to work but may show errors. Consider using Chrome or Edge for full functionality.
+
 ## Future Enhancements
 
 Potential features for future development:
-- Local storage persistence
 - Export to Excel/CSV
 - Import from existing spreadsheets
 - Multi-project management
@@ -190,6 +232,7 @@ Potential features for future development:
 - Collaborative editing
 - Budget templates library
 - Historical version tracking
+- Fallback save methods for unsupported browsers
 
 ## Contributing
 
