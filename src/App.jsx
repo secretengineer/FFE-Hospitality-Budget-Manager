@@ -38,21 +38,39 @@ const Card = ({ children, className = "" }) => (
  * SectionHeader Component
  * Displays a header for budget category sections with an icon, title, and subtotal.
  * Provides visual distinction between different FF&E categories.
+ * Now includes inline editing for title and delete functionality.
  * 
  * @param {Object} props - Component props
  * @param {React.Component} props.icon - Lucide icon component to display
  * @param {string} props.title - Section title text
  * @param {string} props.total - Formatted currency string for subtotal
  * @param {string} props.colorClass - Tailwind color class for theming
+ * @param {Function} props.onTitleChange - Callback when title is edited
+ * @param {Function} props.onDelete - Callback when delete button is clicked
  * @returns {JSX.Element} Styled section header
  */
-const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800" }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg">
-    <div className="flex items-center gap-3">
+const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete }) => (
+  <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg print:bg-white">
+    <div className="flex items-center gap-3 flex-1">
       <div className={`p-2 rounded-md ${colorClass} bg-opacity-10`}>
         <Icon size={20} className={colorClass} />
       </div>
-      <h3 className="font-bold text-lg text-gray-800 uppercase tracking-wide">{title}</h3>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => onTitleChange && onTitleChange(e.target.value)}
+        className="font-bold text-lg text-gray-800 uppercase tracking-wide bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1"
+        style={{ outline: 'none' }}
+      />
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-2 hover:bg-red-100 rounded text-red-600 print:hidden"
+          title="Delete Section"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
     </div>
     <div className="text-right">
       <div className="text-xs text-gray-500 font-medium uppercase">Subtotal</div>
@@ -609,6 +627,55 @@ export default function App() {
   };
 
   /**
+   * Add New Category/Section
+   * Creates a new budget category with default settings.
+   * Uses timestamp for unique ID and includes one empty line item.
+   */
+  const addCategory = () => {
+    const newCategory = {
+      id: `cat_${Date.now()}`,
+      title: 'New Section',
+      icon: Layout,
+      color: 'text-gray-600',
+      items: [
+        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', notes: '' }
+      ]
+    };
+    setCategories(prev => [...prev, newCategory]);
+  };
+
+  /**
+   * Update Category Title
+   * Updates the title of a category section.
+   * 
+   * @param {string} catId - Category ID to update
+   * @param {string} newTitle - New title for the category
+   */
+  const updateCategoryTitle = (catId, newTitle) => {
+    setCategories(prev => prev.map(cat => {
+      if (cat.id !== catId) return cat;
+      return { ...cat, title: newTitle };
+    }));
+  };
+
+  /**
+   * Remove Category/Section
+   * Removes an entire category and all its line items.
+   * Prompts for confirmation before deletion.
+   * 
+   * @param {string} catId - Category ID to remove
+   */
+  const removeCategory = (catId) => {
+    const category = categories.find(cat => cat.id === catId);
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the "${category?.title}" section? This will remove all line items in this section.`
+    );
+    if (confirmed) {
+      setCategories(prev => prev.filter(cat => cat.id !== catId));
+    }
+  };
+
+  /**
    * Handle Print Action
    * Triggers the browser's print dialog for PDF generation or printing.
    * CSS print styles are applied automatically via @media print rules.
@@ -836,13 +903,15 @@ export default function App() {
         {/* Iterates through all categories to display line item tables */}
         <div className="space-y-8">
           {categories.map((category) => (
-            <div key={category.id} className="break-inside-avoid">
+            <div key={category.id} className="break-inside-avoid group">
               <Card className="overflow-hidden">
                 <SectionHeader 
                   icon={category.icon} 
                   title={category.title} 
                   total={formatCurrency(totals.categoryTotals[category.id])} 
                   colorClass={category.color}
+                  onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
+                  onDelete={() => removeCategory(category.id)}
                 />
                 
                 {/* Line Items Table */}
@@ -856,7 +925,7 @@ export default function App() {
                         <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
                         <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>
                         <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>
-                        <th style={{ padding: '12px 16px', width: '60px', textAlign: 'center' }}>Qty</th>
+                        <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>
                         <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>
                         <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>
                         <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>
@@ -1038,6 +1107,17 @@ export default function App() {
               </Card>
             </div>
           ))}
+          
+          {/* Add New Section Button */}
+          <div className="print:hidden">
+            <button
+              onClick={addCategory}
+              className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 font-semibold"
+            >
+              <Plus size={20} />
+              Add New Section
+            </button>
+          </div>
         </div>
 
         {/* ===== FOOTER / TERMS & CONDITIONS ===== */}
