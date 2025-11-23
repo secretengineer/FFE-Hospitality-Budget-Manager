@@ -11,14 +11,38 @@ import {
   Briefcase 
 } from 'lucide-react';
 
-// --- Components ---
+// ============================================================================
+// REUSABLE UI COMPONENTS
+// ============================================================================
 
+/**
+ * Card Component
+ * A reusable wrapper component that provides consistent styling for content containers.
+ * Used throughout the application for visual grouping and hierarchy.
+ * 
+ * @param {Object} props - Component props
+ * @param {React.ReactNode} props.children - Content to be rendered inside the card
+ * @param {string} props.className - Additional CSS classes to apply
+ * @returns {JSX.Element} Styled card container
+ */
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
     {children}
   </div>
 );
 
+/**
+ * SectionHeader Component
+ * Displays a header for budget category sections with an icon, title, and subtotal.
+ * Provides visual distinction between different FF&E categories.
+ * 
+ * @param {Object} props - Component props
+ * @param {React.Component} props.icon - Lucide icon component to display
+ * @param {string} props.title - Section title text
+ * @param {string} props.total - Formatted currency string for subtotal
+ * @param {string} props.colorClass - Tailwind color class for theming
+ * @returns {JSX.Element} Styled section header
+ */
 const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800" }) => (
   <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg">
     <div className="flex items-center gap-3">
@@ -34,27 +58,73 @@ const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800" 
   </div>
 );
 
-// --- Main Application ---
+// ============================================================================
+// MAIN APPLICATION COMPONENT
+// ============================================================================
 
-// RENAME: The component name must be App to match the standard Vite/React export structure.
+/**
+ * App Component
+ * Main application component for the Hospitality FF&E Budget Manager.
+ * Manages project information, budget categories, line items, and calculations.
+ * 
+ * Features:
+ * - Real-time budget tracking with variance calculation
+ * - Multi-category FF&E item management
+ * - Editable project details and company branding
+ * - Print-friendly layout with automatic page numbering
+ * - Tax calculation with configurable rates
+ * 
+ * @returns {JSX.Element} Complete budget management application
+ */
 export default function App() { 
-  // --- State Management ---
+  // ============================================================================
+  // STATE MANAGEMENT
+  // ============================================================================
   
+  /**
+   * Project Information State
+   * Stores all project-specific details including client info, budget allowance,
+   * and company branding information for document headers.
+   */
   const [projectInfo, setProjectInfo] = useState({
+    // Project Details
     name: "Project Name",
     address: "project address goes here, city, state, zip code",
     date: new Date().toISOString().split('T')[0],
     client: "Development Group LLC",
-    allowance: 750000,
-    salesTaxRate: 10.25,
-    // NEW BRANDING FIELDS
+    allowance: 750000, // Total budget allowance in USD
+    salesTaxRate: 10.25, // Tax rate as percentage (e.g., 10.25%)
+    
+    // Company Branding
     companyName: "Pat Ryan Things LLC.",
     companyAddress: "1521 Syracuse St, Denver, CO 80220",
     companyPhone: "303 434 4595",
     companyEmail: "pat@patryan.com",
-    logoUrl: "https://placehold.co/72x72/0A6EBD/FFFFFF?text=DSG", // Placeholder Logo
+    logoUrl: "https://placehold.co/72x72/0A6EBD/FFFFFF?text=DSG", // Placeholder logo URL
   });
 
+  /**
+   * Budget Categories State
+   * Organizes FF&E items into logical categories with associated icons and colors.
+   * Each category contains an array of line items with detailed specifications.
+   * 
+   * Category Structure:
+   * - id: Unique identifier for the category
+   * - title: Display name for the category section
+   * - icon: Lucide icon component for visual representation
+   * - color: Tailwind color class for theming
+   * - items: Array of line items within this category
+   * 
+   * Item Structure:
+   * - id: Unique identifier for the line item
+   * - mfr: Manufacturer or vendor name
+   * - desc: Item description
+   * - dimensions: Physical dimensions or specifications
+   * - qty: Quantity ordered
+   * - unitPrice: Price per unit in USD
+   * - leadTime: Expected delivery or production time
+   * - notes: Additional information (finish, color, special instructions)
+   */
   const [categories, setCategories] = useState([
     {
       id: 'foh',
@@ -112,8 +182,18 @@ export default function App() {
     }
   ]);
 
-  // --- Calculations ---
+  // ============================================================================
+  // UTILITY FUNCTIONS & CALCULATIONS
+  // ============================================================================
 
+  /**
+   * Format Currency Helper
+   * Converts numeric values to USD currency format without decimal places.
+   * Uses the browser's built-in Intl.NumberFormat for localization.
+   * 
+   * @param {number} val - Numeric value to format
+   * @returns {string} Formatted currency string (e.g., "$1,234")
+   */
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -123,16 +203,32 @@ export default function App() {
     }).format(val);
   };
 
+  /**
+   * Budget Totals Calculation
+   * Memoized calculation of all budget totals to optimize performance.
+   * Recalculates only when categories, allowance, or tax rate changes.
+   * 
+   * Calculations:
+   * - categoryTotals: Sum of items within each category
+   * - grandTotal: Sum of all categories (pre-tax)
+   * - tax: Calculated tax based on salesTaxRate
+   * - totalWithTax: Grand total including tax
+   * - variance: Difference between allowance and total (positive = under budget)
+   * 
+   * @returns {Object} Object containing all calculated totals
+   */
   const totals = useMemo(() => {
     let grandTotal = 0;
     const categoryTotals = {};
 
+    // Calculate subtotal for each category
     categories.forEach(cat => {
       const catSum = cat.items.reduce((sum, item) => sum + (item.qty * item.unitPrice), 0);
       categoryTotals[cat.id] = catSum;
       grandTotal += catSum;
     });
 
+    // Calculate tax and final totals
     const tax = grandTotal * (projectInfo.salesTaxRate / 100);
     const totalWithTax = grandTotal + tax;
     const variance = projectInfo.allowance - totalWithTax;
@@ -141,13 +237,53 @@ export default function App() {
   }, [categories, projectInfo.allowance, projectInfo.salesTaxRate]);
 
 
-  // --- Event Handlers ---
+  // ============================================================================
+  // EVENT HANDLERS
+  // ============================================================================
 
+  /**
+   * Update Project Information
+   * Updates a specific field in the project information state.
+   * Uses functional setState to ensure we're working with latest state.
+   * Includes validation for numeric fields to prevent invalid data.
+   * 
+   * @param {string} field - The field name to update in projectInfo
+   * @param {any} value - The new value to set
+   */
   const handleProjectUpdate = (field, value) => {
+    // Validate numeric fields
+    if (field === 'allowance' || field === 'salesTaxRate') {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || numValue < 0) {
+        console.warn(`Invalid ${field} value: ${value}. Must be a positive number.`);
+        return; // Don't update with invalid value
+      }
+    }
+    
     setProjectInfo(prev => ({ ...prev, [field]: value }));
   };
 
+  /**
+   * Update Line Item
+   * Updates a specific field of a line item within a category.
+   * Immutably updates the nested state structure.
+   * Includes validation for numeric fields (qty, unitPrice).
+   * 
+   * @param {string} catId - Category ID containing the item
+   * @param {number} itemId - Line item ID to update
+   * @param {string} field - Field name to update in the item
+   * @param {any} value - New value to set
+   */
   const updateItem = (catId, itemId, field, value) => {
+    // Validate numeric fields for line items
+    if (field === 'qty' || field === 'unitPrice') {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || numValue < 0) {
+        console.warn(`Invalid ${field} for item ${itemId}: ${value}. Must be a positive number.`);
+        return; // Don't update with invalid value
+      }
+    }
+    
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
       return {
@@ -160,9 +296,16 @@ export default function App() {
     }));
   };
 
+  /**
+   * Add New Line Item
+   * Adds a new empty line item to the specified category.
+   * Uses timestamp as unique ID to prevent collisions.
+   * 
+   * @param {string} catId - Category ID to add the item to
+   */
   const addItem = (catId) => {
     const newItem = {
-      id: Date.now(),
+      id: Date.now(), // Using timestamp as unique ID
       mfr: '',
       desc: 'New Item',
       dimensions: '',
@@ -178,25 +321,42 @@ export default function App() {
     }));
   };
 
+  /**
+   * Remove Line Item
+   * Removes a line item from a category.
+   * Logs the action for debugging purposes.
+   * 
+   * @param {string} catId - Category ID containing the item
+   * @param {number} itemId - Line item ID to remove
+   */
   const removeItem = (catId, itemId) => {
-    // IMPORTANT: Using console logging instead of window.confirm()
-    console.log(`Attempting to remove item ${itemId} from category ${catId}`);
+    // Log removal action for audit trail
+    console.log(`Removing item ${itemId} from category ${catId}`);
+    
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
       return { ...cat, items: cat.items.filter(item => item.id !== itemId) };
     }));
   };
 
+  /**
+   * Handle Print Action
+   * Triggers the browser's print dialog for PDF generation or printing.
+   * CSS print styles are applied automatically via @media print rules.
+   */
   const handlePrint = () => {
     window.print();
   };
 
-  // --- Render ---
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-800 print:bg-white pb-20">
       
-      {/* Top Navigation Bar */}
+      {/* ===== TOP NAVIGATION BAR ===== */}
+      {/* Hidden when printing, provides app branding and print functionality */}
       <div className="bg-slate-900 text-white shadow-lg print:hidden">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -214,11 +374,13 @@ export default function App() {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
         
-        {/* Header Section: Branding + Project Info */}
+        {/* ===== HEADER SECTION ===== */}
+        {/* Company branding and project information displayed at top of document */}
         <Card className="mb-8 p-6 print:shadow-none print:border-none print:p-0">
           <div className="flex flex-col lg:flex-row justify-between gap-8">
             
-            {/* 1. Company Branding (Left Column) */}
+            {/* Company Branding Column (Left) */}
+            {/* Displays company logo, name, address, and contact information */}
             <div className="flex flex-col gap-1 w-full lg:w-1/3 border-b lg:border-b-0 lg:border-r border-gray-200 lg:pr-8 pb-4 lg:pb-0">
               <img 
                 src={projectInfo.logoUrl} 
@@ -257,7 +419,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2. Project Details (Right Columns) */}
+            {/* Project Details Columns (Right) */}
+            {/* Editable fields for project name, client, date, and location */}
             <div className="w-full lg:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Project Name</label>
@@ -303,8 +466,10 @@ export default function App() {
           </div>
         </Card>
 
-        {/* Dashboard Summary */}
+        {/* ===== DASHBOARD SUMMARY ===== */}
+        {/* Four-card dashboard showing key budget metrics at a glance */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          {/* Budget Allowance Card - Editable total budget */}
           <Card className="p-5 border-l-4 border-blue-500">
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Budget Allowance</div>
             <div className="flex items-center gap-2">
@@ -318,6 +483,7 @@ export default function App() {
             </div>
           </Card>
 
+          {/* FF&E Subtotal Card - Calculated from all line items (pre-tax) */}
           <Card className="p-5 border-l-4 border-gray-400">
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">FF&E Subtotal</div>
             <div className="text-2xl font-bold text-gray-800">
@@ -326,6 +492,7 @@ export default function App() {
             <div className="text-xs text-gray-400 mt-1">Before Tax</div>
           </Card>
 
+          {/* Tax Card - Shows calculated tax with editable rate */}
           <Card className="p-5 border-l-4 border-gray-400">
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Est. Tax Total</div>
@@ -345,6 +512,8 @@ export default function App() {
             <div className="text-xs text-gray-400 mt-1">Total w/ Tax: {formatCurrency(totals.totalWithTax)}</div>
           </Card>
 
+          {/* Budget Variance Card - Shows over/under budget status with color coding */}
+          {/* Green background = under budget, Red background = over budget */}
           <Card className={`p-5 border-l-4 ${totals.variance >= 0 ? 'border-emerald-500 bg-emerald-50' : 'border-rose-500 bg-rose-50'}`}>
             <div className={`text-xs font-bold uppercase tracking-wider mb-1 ${totals.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               Budget Variance
@@ -358,7 +527,8 @@ export default function App() {
           </Card>
         </div>
 
-        {/* Budget Categories */}
+        {/* ===== BUDGET CATEGORIES ===== */}
+        {/* Iterates through all categories to display line item tables */}
         <div className="space-y-8">
           {categories.map((category) => (
             <div key={category.id} className="break-inside-avoid">
@@ -370,6 +540,8 @@ export default function App() {
                   colorClass={category.color}
                 />
                 
+                {/* Line Items Table */}
+                {/* Responsive table with inline editing for all item fields */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
@@ -387,9 +559,12 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
+                      {/* Map through each line item in category */}
                       {category.items.map((item, index) => (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
+                          {/* Row number (1-indexed for user readability) */}
                           <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
+                          {/* Manufacturer/Vendor field */}
                           <td className="px-4 py-2">
                             <input 
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 font-medium text-gray-900 placeholder-gray-300"
@@ -398,6 +573,7 @@ export default function App() {
                               placeholder="Mfr Name"
                             />
                           </td>
+                          {/* Item description field */}
                           <td className="px-4 py-2">
                             <input 
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-900 placeholder-gray-300"
@@ -406,6 +582,7 @@ export default function App() {
                               placeholder="Item Description"
                             />
                           </td>
+                          {/* Dimensions field */}
                           <td className="px-4 py-2">
                             <input 
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 placeholder-gray-300"
@@ -414,7 +591,8 @@ export default function App() {
                               placeholder='Dimensions'
                             />
                           </td>
-                           <td className="px-4 py-2">
+                          {/* Lead time field */}
+                          <td className="px-4 py-2">
                             <input 
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 placeholder-gray-300"
                               value={item.leadTime}
@@ -422,6 +600,7 @@ export default function App() {
                               placeholder='L/T'
                             />
                           </td>
+                          {/* Quantity field - highlighted with blue background */}
                           <td className="px-4 py-2">
                             <input 
                               type="number"
@@ -430,6 +609,7 @@ export default function App() {
                               onChange={(e) => updateItem(category.id, item.id, 'qty', parseFloat(e.target.value) || 0)}
                             />
                           </td>
+                          {/* Unit price field with dollar sign prefix */}
                           <td className="px-4 py-2">
                             <div className="relative">
                                 <span className="absolute left-1 top-1 text-gray-400 text-xs">$</span>
@@ -441,10 +621,12 @@ export default function App() {
                                 />
                             </div>
                           </td>
+                          {/* Calculated total for this line (qty × unit price) */}
                           <td className="px-4 py-3 text-right font-medium text-gray-900 bg-gray-50/50">
                             {formatCurrency(item.qty * item.unitPrice)}
                           </td>
-                           <td className="px-4 py-2">
+                          {/* Notes field - for finish, color, or special instructions */}
+                          <td className="px-4 py-2">
                             <input 
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 italic placeholder-gray-300"
                               value={item.notes}
@@ -452,10 +634,12 @@ export default function App() {
                               placeholder="Finish / Note"
                             />
                           </td>
+                          {/* Delete button - appears on hover, hidden when printing */}
                           <td className="px-4 py-2 text-center print:hidden opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => removeItem(category.id, item.id)}
                               className="text-gray-400 hover:text-red-500 transition"
+                              aria-label="Delete item"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -466,10 +650,12 @@ export default function App() {
                   </table>
                 </div>
                 
+                {/* Add Item Button - Hidden when printing */}
                 <div className="bg-gray-50 p-3 border-t border-gray-100 print:hidden">
                   <button 
                     onClick={() => addItem(category.id)}
                     className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition px-2 py-1 rounded"
+                    aria-label={`Add item to ${category.title}`}
                   >
                     <Plus size={16} /> Add {category.title.split('|')[0]} Item
                   </button>
@@ -479,7 +665,8 @@ export default function App() {
           ))}
         </div>
 
-        {/* Footer / Terms */}
+        {/* ===== FOOTER / TERMS & CONDITIONS ===== */}
+        {/* Document footer with standard terms and generation timestamp */}
         <div className="mt-12 border-t border-gray-200 pt-8 text-gray-500 text-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
@@ -499,10 +686,11 @@ export default function App() {
 
       </div>
       
-      {/* Print Styles Injection for Footer and Page Numbering */}
+      {/* ===== PRINT STYLES ===== */}
+      {/* Inline styles for print media - controls page layout, margins, and footer content */}
       <style>{`
         @media print {
-          /* Setup the @page rule to define margins and print footer content */
+          /* Configure print page settings with margins and automatic footer content */}
           @page {
               size: A4 portrait;
               margin: 2.54cm 1.5cm 2.54cm 1.5cm; /* T R B L margins */
