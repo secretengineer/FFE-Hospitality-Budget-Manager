@@ -5,7 +5,7 @@
 ![Vite](https://img.shields.io/badge/Vite-7.2-646CFF?logo=vite&logoColor=white)
 ![License](https://img.shields.io/badge/license-Proprietary-red.svg)
 
-**A professional, interactive budget management tool designed specifically for the hospitality industry.**
+**A professional, interactive budget management tool designed specifically for the hospitality design industry.**
 
 The **FF&E Hospitality BudgetBuilder™** streamlines the complex process of managing Furniture, Fixtures, and Equipment budgets. Built with modern web technologies, it offers the ease of a spreadsheet with the power of a dedicated application—running directly in your browser with no installation required for end-users.
 
