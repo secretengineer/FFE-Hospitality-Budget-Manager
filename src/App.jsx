@@ -1128,11 +1128,11 @@ export default function App() {
               <h4 className="font-bold uppercase tracking-wider mb-2 text-xs">Terms & Conditions</h4>
               <p className="mb-2">1. Estimates are valid for 30 days from date of issue.</p>
               <p className="mb-2">2. Freight and delivery charges are estimated and will be billed at actual cost.</p>
-              <p>3. A 50% deposit is required to initiate orders.</p>
+              <p>3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only.</p>
             </div>
             <div className="flex flex-col justify-end items-end">
               <div className="text-right">
-                <p className="italic">Generated via Pat Ryan Things LLC Budget Tool</p>
+                <p className="italic">© 2025-Generated via Pat Ryan Things LLC BudgetBuilder</p>
                 <p className="font-bold text-gray-900 mt-1">{new Date().toLocaleDateString()}</p>
               </div>
             </div>
