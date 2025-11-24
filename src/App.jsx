@@ -698,7 +698,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <Layout className="text-blue-400" />
             <h1 className="text-xl font-bold tracking-tight">
-              Hospitality FF&E Manager
+              BudgetBuilder FF&E Manager 1.0
               {hasUnsavedChanges && <span className="text-yellow-400 ml-2">*</span>}
             </h1>
           </div>
