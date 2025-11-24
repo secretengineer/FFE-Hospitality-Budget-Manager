@@ -1,4 +1,4 @@
-# FF&E Hospitality Budget Manager
+# FF&E Hospitality BudgetBuilder™
 
 A modern, interactive web application for managing Furniture, Fixtures, and Equipment (FF&E) budgets for hospitality projects. Built with React and Vite for optimal performance and developer experience.
 

@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 src/assets/PRThingsTempLogo.png
 docs/CODE_REVIEW_SUMMARY.md
+package-lock.json
