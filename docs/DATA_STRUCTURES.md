@@ -50,8 +50,8 @@ Represents a budget category grouping related FF&E items.
 
 ```typescript
 type Category = {
-  id: string;                      // Unique identifier (e.g., 'foh', 'custom')
-  title: string;                   // Display title for the category
+  id: string;                      // Unique identifier (e.g., 'foh', 'cat_1732400000000')
+  title: string;                   // Display title for the category (editable)
   icon: LucideIcon;                // Icon component from lucide-react
   color: string;                   // Tailwind color class (e.g., 'text-blue-600')
   items: LineItem[];               // Array of line items in this category
@@ -61,20 +61,18 @@ type Category = {
 **Example:**
 ```javascript
 {
-  id: 'foh',
-  title: 'Front of House | Furniture & Equipment',
-  icon: Armchair,
-  color: 'text-blue-600',
+  id: 'cat_1732400000000',
+  title: 'New Custom Section',
+  icon: Layout,
+  color: 'text-gray-600',
   items: [...]
 }
 ```
 
-**Available Category IDs:**
-- `foh` - Front of House
-- `custom` - Custom Fixtures, Millwork & Lighting
-- `wayfinding` - Wayfinding & Environmental Graphics
-- `exterior` - Exterior Patio & Accessories
-- `fees` - Project Fees & Jobsite Logistics
+**Note:**
+- Default categories use static IDs (`foh`, `custom`, etc.)
+- User-created categories use timestamp-based IDs (`cat_${timestamp}`)
+- Titles are editable by the user
 
 ---
 
