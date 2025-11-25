@@ -11,7 +11,8 @@ import {
   Briefcase,
   Save,
   FolderOpen,
-  FileText
+  FileText,
+  GripVertical
 } from 'lucide-react';
 
 // ============================================================================
@@ -38,7 +39,7 @@ const Card = ({ children, className = "" }) => (
  * SectionHeader Component
  * Displays a header for budget category sections with an icon, title, and subtotal.
  * Provides visual distinction between different FF&E categories.
- * Now includes inline editing for title and delete functionality.
+ * Now includes inline editing for title, delete functionality, and drag handle.
  * 
  * @param {Object} props - Component props
  * @param {React.Component} props.icon - Lucide icon component to display
@@ -47,11 +48,21 @@ const Card = ({ children, className = "" }) => (
  * @param {string} props.colorClass - Tailwind color class for theming
  * @param {Function} props.onTitleChange - Callback when title is edited
  * @param {Function} props.onDelete - Callback when delete button is clicked
+ * @param {boolean} props.isDragging - Whether this section is currently being dragged
+ * @param {Function} props.onDragHandleMouseDown - Callback when drag handle is pressed
  * @returns {JSX.Element} Styled section header
  */
-const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg print:bg-white">
+const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete, isDragging, onDragHandleMouseDown }) => (
+  <div className={`flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg print:bg-white ${isDragging ? 'opacity-50' : ''}`}>
     <div className="flex items-center gap-3 flex-1">
+      {/* Drag Handle - visible on hover, hidden when printing */}
+      <div 
+        className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors print:hidden"
+        title="Drag to reorder section"
+        onMouseDown={onDragHandleMouseDown}
+      >
+        <GripVertical size={20} className="text-gray-400" />
+      </div>
       <div className={`p-2 rounded-md ${colorClass} bg-opacity-10`}>
         <Icon size={20} className={colorClass} />
       </div>
@@ -61,12 +72,14 @@ const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800",
         onChange={(e) => onTitleChange && onTitleChange(e.target.value)}
         className="font-bold text-lg text-gray-800 uppercase tracking-wide bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1"
         style={{ outline: 'none' }}
+        draggable={false}
       />
       {onDelete && (
         <button
           onClick={onDelete}
           className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-2 hover:bg-red-100 rounded text-red-600 print:hidden"
           title="Delete Section"
+          draggable={false}
         >
           <Trash2 size={16} />
         </button>
@@ -215,6 +228,15 @@ export default function App() {
    * Tracks whether the document has unsaved changes to prompt user before closing.
    */
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  /**
+   * Drag State for Section Reordering
+   * Tracks the currently dragged section and drop target for drag-and-drop functionality.
+   * isDragEnabled ensures drag only initiates from the drag handle.
+   */
+  const [draggedSectionId, setDraggedSectionId] = useState(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState(null);
+  const [isDragEnabled, setIsDragEnabled] = useState(false);
 
   // ============================================================================
   // EFFECT HOOKS
@@ -685,6 +707,118 @@ export default function App() {
   };
 
   // ============================================================================
+  // DRAG AND DROP HANDLERS FOR SECTION REORDERING
+  // ============================================================================
+
+  /**
+   * Handle Drag Handle Mouse Down
+   * Called when user presses mouse on the drag handle.
+   * Enables drag for the section so dragging only works from the handle.
+   */
+  const handleDragHandleMouseDown = () => {
+    setIsDragEnabled(true);
+  };
+
+  /**
+   * Handle Drag Start
+   * Called when user starts dragging a section.
+   * Only allows drag if initiated from the drag handle.
+   * Sets the dragged section ID and configures the drag effect.
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {string} categoryId - The ID of the category being dragged
+   */
+  const handleDragStart = (e, categoryId) => {
+    if (!isDragEnabled) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedSectionId(categoryId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', categoryId);
+  };
+
+  /**
+   * Handle Drag Over
+   * Called when a dragged item is over a drop target.
+   * Prevents default to allow dropping and updates the drop target state.
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {string} categoryId - The ID of the category being dragged over
+   */
+  const handleDragOver = (e, categoryId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (categoryId !== draggedSectionId) {
+      setDragOverSectionId(categoryId);
+    }
+  };
+
+  /**
+   * Handle Drag Leave
+   * Called when a dragged item leaves a drop target.
+   * Only clears the drop target state if actually leaving the container
+   * (not just moving between child elements).
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {HTMLElement} containerElement - The container element reference
+   */
+  const handleDragLeave = (e, containerElement) => {
+    // Only clear if we're actually leaving this container, not moving to a child
+    if (containerElement && !containerElement.contains(e.relatedTarget)) {
+      setDragOverSectionId(null);
+    }
+  };
+
+  /**
+   * Handle Drop
+   * Called when a dragged item is dropped on a target.
+   * Reorders the categories array based on the drop position.
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {string} targetCategoryId - The ID of the category where the item was dropped
+   */
+  const handleDrop = (e, targetCategoryId) => {
+    e.preventDefault();
+    
+    if (!draggedSectionId || draggedSectionId === targetCategoryId) {
+      setDraggedSectionId(null);
+      setDragOverSectionId(null);
+      setIsDragEnabled(false);
+      return;
+    }
+
+    setCategories(prev => {
+      const newCategories = [...prev];
+      const draggedIndex = newCategories.findIndex(cat => cat.id === draggedSectionId);
+      const targetIndex = newCategories.findIndex(cat => cat.id === targetCategoryId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+      
+      // Remove the dragged item and insert it at the target position
+      const [draggedCategory] = newCategories.splice(draggedIndex, 1);
+      newCategories.splice(targetIndex, 0, draggedCategory);
+      
+      return newCategories;
+    });
+
+    setDraggedSectionId(null);
+    setDragOverSectionId(null);
+    setIsDragEnabled(false);
+  };
+
+  /**
+   * Handle Drag End
+   * Called when drag operation ends (whether successful or cancelled).
+   * Cleans up the drag state.
+   */
+  const handleDragEnd = () => {
+    setDraggedSectionId(null);
+    setDragOverSectionId(null);
+    setIsDragEnabled(false);
+  };
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
@@ -901,18 +1035,37 @@ export default function App() {
 
         {/* ===== BUDGET CATEGORIES ===== */}
         {/* Iterates through all categories to display line item tables */}
+        {/* Supports drag-and-drop reordering of sections */}
         <div className="space-y-8">
-          {categories.map((category) => (
-            <div key={category.id} className="break-inside-avoid group">
-              <Card className="overflow-hidden">
-                <SectionHeader 
-                  icon={category.icon} 
-                  title={category.title} 
-                  total={formatCurrency(totals.categoryTotals[category.id])} 
-                  colorClass={category.color}
-                  onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
-                  onDelete={() => removeCategory(category.id)}
-                />
+          {categories.map((category) => {
+            let sectionRef = null;
+            return (
+              <div 
+                key={category.id}
+                ref={(el) => { sectionRef = el; }}
+                className={`break-inside-avoid group transition-all duration-200 ${
+                  draggedSectionId === category.id ? 'opacity-50' : ''
+                } ${
+                  dragOverSectionId === category.id ? 'ring-2 ring-blue-500 ring-offset-2 rounded-lg' : ''
+                }`}
+                draggable={isDragEnabled}
+                onDragStart={(e) => handleDragStart(e, category.id)}
+                onDragOver={(e) => handleDragOver(e, category.id)}
+                onDragLeave={(e) => handleDragLeave(e, sectionRef)}
+                onDrop={(e) => handleDrop(e, category.id)}
+                onDragEnd={handleDragEnd}
+              >
+                <Card className="overflow-hidden">
+                  <SectionHeader 
+                    icon={category.icon} 
+                    title={category.title} 
+                    total={formatCurrency(totals.categoryTotals[category.id])} 
+                    colorClass={category.color}
+                    onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
+                    onDelete={() => removeCategory(category.id)}
+                    isDragging={draggedSectionId === category.id}
+                    onDragHandleMouseDown={handleDragHandleMouseDown}
+                  />
                 
                 {/* Line Items Table */}
                 {/* Responsive table with inline editing and dynamic column widths */}
@@ -1106,7 +1259,8 @@ export default function App() {
                 </div>
               </Card>
             </div>
-          ))}
+          );
+          })}
           
           {/* Add New Section Button */}
           <div className="print:hidden">
