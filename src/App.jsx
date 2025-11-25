@@ -122,6 +122,9 @@ export default function App() {
     companyPhone: "303 434 4595",
     companyEmail: "pat@patryan.com",
     logoUrl: "src/assets/PRThingsTempLogo.png", // Placeholder logo URL
+
+    // Terms & Conditions (editable)
+    termsAndConditions: "1. Estimates are valid for 30 days from date of issue.\n2. Freight and delivery charges are estimated and will be billed at actual cost.\n3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only.",
   });
 
   /**
@@ -330,6 +333,7 @@ export default function App() {
       companyPhone: "303 434 4595",
       companyEmail: "pat@patryan.com",
       logoUrl: "src/assets/PRThingsTempLogo.png",
+      termsAndConditions: "1. Estimates are valid for 30 days from date of issue.\n2. Freight and delivery charges are estimated and will be billed at actual cost.\n3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only.",
     });
 
     setCategories([
@@ -1121,14 +1125,18 @@ export default function App() {
         </div>
 
         {/* ===== FOOTER / TERMS & CONDITIONS ===== */}
-        {/* Document footer with standard terms and generation timestamp */}
+        {/* Document footer with editable terms and generation timestamp */}
         <div className="mt-12 border-t border-gray-200 pt-8 text-gray-500 text-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <h4 className="font-bold uppercase tracking-wider mb-2 text-xs">Terms & Conditions</h4>
-              <p className="mb-2">1. Estimates are valid for 30 days from date of issue.</p>
-              <p className="mb-2">2. Freight and delivery charges are estimated and will be billed at actual cost.</p>
-              <p>3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only.</p>
+              <textarea
+                value={projectInfo.termsAndConditions}
+                onChange={(e) => handleProjectUpdate('termsAndConditions', e.target.value)}
+                rows={4}
+                className="w-full text-sm text-gray-600 bg-transparent border border-gray-200 focus:border-blue-500 focus:ring-0 rounded-md p-2 resize-y print:border-none print:p-0"
+                placeholder="Enter terms and conditions..."
+              />
             </div>
             <div className="flex flex-col justify-end items-end">
               <div className="text-right">
