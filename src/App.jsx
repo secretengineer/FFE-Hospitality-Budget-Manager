@@ -11,7 +11,8 @@ import {
   Briefcase,
   Save,
   FolderOpen,
-  FileText
+  FileText,
+  GripVertical
 } from 'lucide-react';
 
 // ============================================================================
@@ -38,7 +39,7 @@ const Card = ({ children, className = "" }) => (
  * SectionHeader Component
  * Displays a header for budget category sections with an icon, title, and subtotal.
  * Provides visual distinction between different FF&E categories.
- * Now includes inline editing for title and delete functionality.
+ * Now includes inline editing for title, delete functionality, and drag handle.
  * 
  * @param {Object} props - Component props
  * @param {React.Component} props.icon - Lucide icon component to display
@@ -47,11 +48,19 @@ const Card = ({ children, className = "" }) => (
  * @param {string} props.colorClass - Tailwind color class for theming
  * @param {Function} props.onTitleChange - Callback when title is edited
  * @param {Function} props.onDelete - Callback when delete button is clicked
+ * @param {boolean} props.isDragging - Whether this section is currently being dragged
  * @returns {JSX.Element} Styled section header
  */
-const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg print:bg-white">
+const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete, isDragging }) => (
+  <div className={`flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg print:bg-white ${isDragging ? 'opacity-50' : ''}`}>
     <div className="flex items-center gap-3 flex-1">
+      {/* Drag Handle - visible on hover, hidden when printing */}
+      <div 
+        className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors print:hidden"
+        title="Drag to reorder section"
+      >
+        <GripVertical size={20} className="text-gray-400" />
+      </div>
       <div className={`p-2 rounded-md ${colorClass} bg-opacity-10`}>
         <Icon size={20} className={colorClass} />
       </div>
@@ -215,6 +224,13 @@ export default function App() {
    * Tracks whether the document has unsaved changes to prompt user before closing.
    */
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  /**
+   * Drag State for Section Reordering
+   * Tracks the currently dragged section and drop target for drag-and-drop functionality.
+   */
+  const [draggedSectionId, setDraggedSectionId] = useState(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState(null);
 
   // ============================================================================
   // EFFECT HOOKS
@@ -685,6 +701,94 @@ export default function App() {
   };
 
   // ============================================================================
+  // DRAG AND DROP HANDLERS FOR SECTION REORDERING
+  // ============================================================================
+
+  /**
+   * Handle Drag Start
+   * Called when user starts dragging a section.
+   * Sets the dragged section ID and configures the drag effect.
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {string} categoryId - The ID of the category being dragged
+   */
+  const handleDragStart = (e, categoryId) => {
+    setDraggedSectionId(categoryId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', categoryId);
+  };
+
+  /**
+   * Handle Drag Over
+   * Called when a dragged item is over a drop target.
+   * Prevents default to allow dropping and updates the drop target state.
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {string} categoryId - The ID of the category being dragged over
+   */
+  const handleDragOver = (e, categoryId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (categoryId !== draggedSectionId) {
+      setDragOverSectionId(categoryId);
+    }
+  };
+
+  /**
+   * Handle Drag Leave
+   * Called when a dragged item leaves a drop target.
+   * Clears the drop target state.
+   */
+  const handleDragLeave = () => {
+    setDragOverSectionId(null);
+  };
+
+  /**
+   * Handle Drop
+   * Called when a dragged item is dropped on a target.
+   * Reorders the categories array based on the drop position.
+   * 
+   * @param {DragEvent} e - The drag event
+   * @param {string} targetCategoryId - The ID of the category where the item was dropped
+   */
+  const handleDrop = (e, targetCategoryId) => {
+    e.preventDefault();
+    
+    if (!draggedSectionId || draggedSectionId === targetCategoryId) {
+      setDraggedSectionId(null);
+      setDragOverSectionId(null);
+      return;
+    }
+
+    setCategories(prev => {
+      const newCategories = [...prev];
+      const draggedIndex = newCategories.findIndex(cat => cat.id === draggedSectionId);
+      const targetIndex = newCategories.findIndex(cat => cat.id === targetCategoryId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+      
+      // Remove the dragged item and insert it at the target position
+      const [draggedCategory] = newCategories.splice(draggedIndex, 1);
+      newCategories.splice(targetIndex, 0, draggedCategory);
+      
+      return newCategories;
+    });
+
+    setDraggedSectionId(null);
+    setDragOverSectionId(null);
+  };
+
+  /**
+   * Handle Drag End
+   * Called when drag operation ends (whether successful or cancelled).
+   * Cleans up the drag state.
+   */
+  const handleDragEnd = () => {
+    setDraggedSectionId(null);
+    setDragOverSectionId(null);
+  };
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
@@ -901,9 +1005,23 @@ export default function App() {
 
         {/* ===== BUDGET CATEGORIES ===== */}
         {/* Iterates through all categories to display line item tables */}
+        {/* Supports drag-and-drop reordering of sections */}
         <div className="space-y-8">
           {categories.map((category) => (
-            <div key={category.id} className="break-inside-avoid group">
+            <div 
+              key={category.id} 
+              className={`break-inside-avoid group transition-all duration-200 ${
+                draggedSectionId === category.id ? 'opacity-50' : ''
+              } ${
+                dragOverSectionId === category.id ? 'ring-2 ring-blue-500 ring-offset-2 rounded-lg' : ''
+              }`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, category.id)}
+              onDragOver={(e) => handleDragOver(e, category.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, category.id)}
+              onDragEnd={handleDragEnd}
+            >
               <Card className="overflow-hidden">
                 <SectionHeader 
                   icon={category.icon} 
@@ -912,6 +1030,7 @@ export default function App() {
                   colorClass={category.color}
                   onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
                   onDelete={() => removeCategory(category.id)}
+                  isDragging={draggedSectionId === category.id}
                 />
                 
                 {/* Line Items Table */}
