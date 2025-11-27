@@ -21,8 +21,10 @@ import {
   Copy,
   Image,
   Paperclip,
-  ExternalLink
+  ExternalLink,
+  Book
 } from 'lucide-react';
+import SpecBookView from './SpecBookView';
 
 // ============================================================================
 // REUSABLE UI COMPONENTS
@@ -1210,6 +1212,31 @@ export default function App() {
   // RENDER
   // ============================================================================
 
+  if (currentView === 'specbook') {
+    return (
+      <>
+        <SpecBookView
+          projectInfo={projectInfo}
+          categories={categories}
+          onBack={() => setCurrentView('budget')}
+          onEditItem={(item, categoryId) => setSpecEditorState({ isOpen: true, item, categoryId })}
+        />
+        {specEditorState.isOpen && (
+          <SpecEditorModal
+            isOpen={specEditorState.isOpen}
+            onClose={() => setSpecEditorState({ ...specEditorState, isOpen: false })}
+            item={specEditorState.item}
+            categoryId={specEditorState.categoryId}
+            onSave={(catId, itemId, specs) => {
+              saveItemSpecs(catId, itemId, specs);
+              setSpecEditorState({ ...specEditorState, isOpen: false });
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   if (currentView === 'welcome') {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 font-sans transition-colors duration-200">
@@ -1361,6 +1388,13 @@ export default function App() {
               <Save size={16} /> Save As
             </button>
             <div className="w-px h-8 bg-gray-600 mx-1"></div>
+            <button
+              onClick={() => setCurrentView('specbook')}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 transition px-4 py-2 rounded-md text-sm font-semibold"
+              title="View Spec Book"
+            >
+              <Book size={16} /> Spec Book
+            </button>
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition px-4 py-2 rounded-md text-sm font-semibold"
