@@ -18,7 +18,10 @@ import {
   X,
   ArrowUp,
   ArrowDown,
-  Copy
+  Copy,
+  Image,
+  Paperclip,
+  ExternalLink
 } from 'lucide-react';
 
 // ============================================================================
@@ -112,6 +115,147 @@ const AutoResizeTextarea = ({ value, onChange, placeholder, className, style, ..
       rows={1}
       {...props}
     />
+  );
+};
+
+/**
+ * SpecEditorModal Component
+ * Modal for editing detailed specifications for a line item.
+ * Supports rich text description and file attachments.
+ */
+const SpecEditorModal = ({ isOpen, onClose, item, categoryId, onSave }) => {
+  const [detailedDescription, setDetailedDescription] = useState(item.specs?.detailedDescription || '');
+  const [attachments, setAttachments] = useState(item.specs?.attachments || []);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    onSave(categoryId, item.id, {
+      detailedDescription,
+      attachments
+    });
+    onClose();
+  };
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setAttachments(prev => [...prev, {
+          id: Date.now() + Math.random(),
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          dataUrl: event.target.result
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeAttachment = (id) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 print:hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Item Specifications</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{item.mfr} - {item.desc}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+          >
+            <X size={20} className="text-gray-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Detailed Description */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Detailed Description
+            </label>
+            <textarea
+              value={detailedDescription}
+              onChange={(e) => setDetailedDescription(e.target.value)}
+              rows={8}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Enter detailed product specifications, materials, finishes, special requirements, installation notes, etc."
+            />
+          </div>
+
+          {/* Attachments */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Attachments
+            </label>
+            <div className="space-y-3">
+              {/* Upload Button */}
+              <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer transition bg-gray-50 dark:bg-gray-700/50">
+                <Paperclip size={18} className="text-gray-500" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Add Photos or Documents</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.doc,.docx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Attachment List */}
+              {attachments.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {attachments.map(att => (
+                    <div key={att.id} className="relative group border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:border-blue-500 transition">
+                      {att.type.startsWith('image/') ? (
+                        <img src={att.dataUrl} alt={att.name} className="w-full h-32 object-cover rounded mb-2" />
+                      ) : (
+                        <div className="w-full h-32 bg-gray-100 dark:bg-gray-700 rounded mb-2 flex items-center justify-center">
+                          <FileText size={48} className="text-gray-400" />
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{att.name}</p>
+                      <p className="text-xs text-gray-400">{(att.size / 1024).toFixed(1)} KB</p>
+                      <button
+                        onClick={() => removeAttachment(att.id)}
+                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            <Save size={16} />
+            Save Specifications
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -212,8 +356,8 @@ export default function App() {
       icon: Signpost,
       color: 'text-purple-600',
       items: [
-        { id: 7, mfr: 'SignPro', desc: 'Vendor Stall Headers', dimensions: '48" x 12"', qty: 12, unitPrice: 450, leadTime: '4 Weeks', notes: 'Illuminated' },
-        { id: 8, mfr: 'SignPro', desc: 'Restroom Directional', dimensions: '12" x 12"', qty: 4, unitPrice: 125, leadTime: '2 Weeks', notes: 'Vinyl on Acrylic' },
+        { id: 7, mfr: 'SignPro', desc: 'Vendor Stall Headers', dimensions: '48" x 12"', qty: 12, unitPrice: 450, leadTime: '4 Weeks', status: 'Draft', notes: 'Illuminated', specs: { detailedDescription: '', attachments: [] } },
+        { id: 8, mfr: 'SignPro', desc: 'Restroom Directional', dimensions: '12" x 12"', qty: 4, unitPrice: 125, leadTime: '2 Weeks', status: 'Draft', notes: 'Vinyl on Acrylic', specs: { detailedDescription: '', attachments: [] } },
       ]
     },
     {
@@ -222,9 +366,9 @@ export default function App() {
       icon: TreePine,
       color: 'text-emerald-600',
       items: [
-        { id: 9, mfr: 'Fermob', desc: 'Bistro Tables', dimensions: '24" Round', qty: 15, unitPrice: 340, leadTime: 'In Stock', notes: 'Poppy Red' },
-        { id: 10, mfr: 'Fermob', desc: 'Folding Chairs', dimensions: 'Standard', qty: 30, unitPrice: 120, leadTime: 'In Stock', notes: 'Metal' },
-        { id: 11, mfr: 'PlanterCo', desc: 'Dividing Planters', dimensions: '48"L x 18"W', qty: 8, unitPrice: 650, leadTime: '3 Weeks', notes: 'Cortens Steel' },
+        { id: 9, mfr: 'Fermob', desc: 'Bistro Tables', dimensions: '24" Round', qty: 15, unitPrice: 340, leadTime: 'In Stock', status: 'Draft', notes: 'Poppy Red', specs: { detailedDescription: '', attachments: [] } },
+        { id: 10, mfr: 'Fermob', desc: 'Folding Chairs', dimensions: 'Standard', qty: 30, unitPrice: 120, leadTime: 'In Stock', status: 'Draft', notes: 'Metal', specs: { detailedDescription: '', attachments: [] } },
+        { id: 11, mfr: 'PlanterCo', desc: 'Dividing Planters', dimensions: '48"L x 18"W', qty: 8, unitPrice: 650, leadTime: '3 Weeks', status: 'Draft', notes: 'Cortens Steel', specs: { detailedDescription: '', attachments: [] } },
       ]
     },
     {
@@ -233,9 +377,9 @@ export default function App() {
       icon: Briefcase,
       color: 'text-gray-600',
       items: [
-        { id: 12, mfr: 'Internal', desc: 'Project Management Fee', dimensions: 'N/A', qty: 200, unitPrice: 85, leadTime: 'Ongoing', notes: 'Est Hours' },
-        { id: 13, mfr: 'Logistics Co', desc: 'Receiving & Assembly', dimensions: 'N/A', qty: 1, unitPrice: 13000, leadTime: 'N/A', notes: 'White glove' },
-        { id: 14, mfr: 'Travel', desc: 'Site Visits / Travel', dimensions: 'N/A', qty: 1, unitPrice: 6000, leadTime: 'N/A', notes: 'Flight + Hotel' },
+        { id: 12, mfr: 'Internal', desc: 'Project Management Fee', dimensions: 'N/A', qty: 200, unitPrice: 85, leadTime: 'Ongoing', status: 'Draft', notes: 'Est Hours', specs: { detailedDescription: '', attachments: [] } },
+        { id: 13, mfr: 'Logistics Co', desc: 'Receiving & Assembly', dimensions: 'N/A', qty: 1, unitPrice: 13000, leadTime: 'N/A', status: 'Draft', notes: 'White glove', specs: { detailedDescription: '', attachments: [] } },
+        { id: 14, mfr: 'Travel', desc: 'Site Visits / Travel', dimensions: 'N/A', qty: 1, unitPrice: 6000, leadTime: 'N/A', status: 'Draft', notes: 'Flight + Hotel', specs: { detailedDescription: '', attachments: [] } },
       ]
     }
   ]);
@@ -252,6 +396,12 @@ export default function App() {
    * Tracks whether the document has unsaved changes to prompt user before closing.
    */
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  /**
+   * Spec Editor State
+   * Controls which item is being edited in the specifications modal.
+   */
+  const [specEditorState, setSpecEditorState] = useState({ isOpen: false, item: null, categoryId: null });
 
   /**
    * View State
@@ -745,7 +895,8 @@ export default function App() {
       unitPrice: 0,
       leadTime: '',
       status: 'Draft',
-      notes: ''
+      notes: '',
+      specs: { detailedDescription: '', attachments: [] }
     };
 
     setCategories(prev => prev.map(cat => {
@@ -780,6 +931,27 @@ export default function App() {
   };
 
   /**
+   * Save Item Specifications
+   * Updates the detailed specifications for a line item.
+   * 
+   * @param {string} catId - Category ID containing the item
+   * @param {number} itemId - Line item ID to update
+   * @param {Object} specs - Specification data (detailedDescription, attachments)
+   */
+  const saveItemSpecs = (catId, itemId, specs) => {
+    setCategories(prev => prev.map(cat => {
+      if (cat.id !== catId) return cat;
+      return {
+        ...cat,
+        items: cat.items.map(item => {
+          if (item.id !== itemId) return item;
+          return { ...item, specs };
+        })
+      };
+    }));
+  };
+
+  /**
    * Add New Category/Section
    * Creates a new budget category with default settings.
    * Uses timestamp for unique ID and includes one empty line item.
@@ -791,7 +963,7 @@ export default function App() {
       icon: Layout,
       color: 'text-gray-600',
       items: [
-        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '' }
+        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
       ]
     };
     setCategories(prev => [...prev, newCategory]);
@@ -1146,92 +1318,120 @@ export default function App() {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
 
+        {/* Spec Editor Modal */}
+        {specEditorState.isOpen && (
+          <SpecEditorModal
+            isOpen={specEditorState.isOpen}
+            item={specEditorState.item}
+            categoryId={specEditorState.categoryId}
+            onSave={saveItemSpecs}
+            onClose={() => setSpecEditorState({ isOpen: false, item: null, categoryId: null })}
+          />
+        )}
+
         {/* ===== HEADER SECTION ===== */}
         {/* Company branding and project information displayed at top of document */}
-        <Card className="mb-8 p-6 print:shadow-none print:border-none print:p-0">
-          <div className="flex flex-col lg:flex-row justify-between gap-8">
+        <Card className="mb-8 print:shadow-none print:border-none print:p-0">
+          {/* Top Bar: Logo & Company Info */}
+          <div className="flex items-start justify-between p-8 pb-6 border-b border-gray-100 dark:border-gray-700 print:border-gray-200">
+            <div className="flex gap-6 items-start">
+              {/* Logo */}
+              <div className="flex-shrink-0">
+                <img
+                  src={projectInfo.logoUrl}
+                  alt={`${projectInfo.companyName} Logo`}
+                  className="w-20 h-20 object-contain rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2"
+                />
+              </div>
 
-            {/* Company Branding Column (Left) */}
-            {/* Displays company logo, name, address, and contact information */}
-            <div className="flex flex-col gap-1 w-full lg:w-1/3 border-b lg:border-b-0 lg:border-r border-gray-200 lg:pr-8 pb-4 lg:pb-0">
-              <img
-                src={projectInfo.logoUrl}
-                alt={`${projectInfo.companyName} Logo`}
-                className="w-[72px] h-[72px] object-contain mb-2 rounded-lg border border-gray-100"
-              />
-              <input
-                type="text"
-                value={projectInfo.companyName}
-                onChange={(e) => handleProjectUpdate('companyName', e.target.value)}
-                className="text-xl font-bold text-gray-900 dark:text-white border-none focus:ring-0 p-0 placeholder-gray-300 bg-transparent"
-                placeholder="Company Name"
-              />
-              <input
-                type="text"
-                value={projectInfo.companyAddress}
-                onChange={(e) => handleProjectUpdate('companyAddress', e.target.value)}
-                className="text-sm text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
-                placeholder="Company Address"
-              />
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {/* Company Details */}
+              <div className="flex flex-col gap-1">
                 <input
                   type="text"
-                  value={projectInfo.companyPhone}
-                  onChange={(e) => handleProjectUpdate('companyPhone', e.target.value)}
-                  className="text-sm text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
-                  placeholder="Phone"
-                /> |
-                <input
-                  type="email"
-                  value={projectInfo.companyEmail}
-                  onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
-                  className="text-sm text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
-                  placeholder="Email"
+                  value={projectInfo.companyName}
+                  onChange={(e) => handleProjectUpdate('companyName', e.target.value)}
+                  className="text-xl font-bold text-gray-900 dark:text-white print:text-black border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 placeholder-gray-300 bg-transparent"
+                  placeholder="Company Name"
+                  style={{ outline: 'none' }}
                 />
+                <AutoResizeTextarea
+                  value={projectInfo.companyAddress}
+                  onChange={(e) => handleProjectUpdate('companyAddress', e.target.value)}
+                  className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-700 border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 bg-transparent"
+                  placeholder="Company Address"
+                  style={{ outline: 'none' }}
+                />
+                <div className="flex gap-3 text-sm text-gray-500 dark:text-gray-400 print:text-gray-600 mt-1">
+                  <input
+                    type="text"
+                    value={projectInfo.companyPhone}
+                    onChange={(e) => handleProjectUpdate('companyPhone', e.target.value)}
+                    className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 bg-transparent w-32"
+                    placeholder="Phone"
+                    style={{ outline: 'none' }}
+                  />
+                  <span className="text-gray-300">•</span>
+                  <input
+                    type="email"
+                    value={projectInfo.companyEmail}
+                    onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
+                    className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 bg-transparent flex-1"
+                    placeholder="Email"
+                    style={{ outline: 'none' }}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Project Details Columns (Right) */}
-            {/* Editable fields for project name, client, date, and location */}
-            <div className="w-full lg:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Project Name</label>
-                <input
-                  type="text"
+            {/* Date - Top Right */}
+            <div className="text-right">
+              <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-1">Date</div>
+              <input
+                type="date"
+                value={projectInfo.date}
+                onChange={(e) => handleProjectUpdate('date', e.target.value)}
+                className="text-sm font-medium text-gray-700 dark:text-gray-300 print:text-black border border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-0 rounded px-2 py-1 bg-transparent dark:[color-scheme:dark] print:border-gray-300"
+              />
+            </div>
+          </div>
+
+          {/* Project Information Section */}
+          <div className="p-8 pt-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-800/50 print:bg-white">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+              {/* Project Name - Spans 2 columns */}
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-2">Project Name</label>
+                <AutoResizeTextarea
                   value={projectInfo.name}
                   onChange={(e) => handleProjectUpdate('name', e.target.value)}
-                  className="w-full text-3xl font-bold text-gray-900 dark:text-white border-none focus:ring-0 p-0 placeholder-gray-300 bg-transparent"
+                  className="w-full text-4xl font-extrabold text-gray-900 dark:text-white print:text-black border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 placeholder-gray-300 bg-transparent leading-tight"
                   placeholder="Project Name"
+                  style={{ outline: 'none' }}
                 />
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Client</label>
-                    <input
-                      type="text"
-                      value={projectInfo.client}
-                      onChange={(e) => handleProjectUpdate('client', e.target.value)}
-                      className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-0 px-0 py-1 bg-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Date</label>
-                    <input
-                      type="date"
-                      value={projectInfo.date}
-                      onChange={(e) => handleProjectUpdate('date', e.target.value)}
-                      className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-0 px-0 py-1 bg-transparent dark:[color-scheme:dark]"
-                    />
-                  </div>
+
+                {/* Client - Below Project Name */}
+                <div className="mt-6">
+                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-2">Client</label>
+                  <AutoResizeTextarea
+                    value={projectInfo.client}
+                    onChange={(e) => handleProjectUpdate('client', e.target.value)}
+                    className="w-full text-lg font-semibold text-gray-700 dark:text-gray-300 print:text-black border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 bg-transparent"
+                    placeholder="Client Name"
+                    style={{ outline: 'none' }}
+                  />
                 </div>
               </div>
+
+              {/* Location/Address */}
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Location / Address</label>
-                <textarea
+                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-2">Location / Address</label>
+                <AutoResizeTextarea
                   value={projectInfo.address}
                   onChange={(e) => handleProjectUpdate('address', e.target.value)}
-                  rows={3}
-                  className="w-full text-lg text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
+                  className="w-full text-base text-gray-600 dark:text-gray-400 print:text-gray-700 border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 bg-transparent leading-relaxed"
                   placeholder="Project Address"
+                  style={{ outline: 'none' }}
                 />
               </div>
             </div>
@@ -1437,12 +1637,30 @@ export default function App() {
                           </td>
                           {/* Notes field - for finish, color, or special instructions */}
                           <td className="px-4 py-2 align-top">
-                            <AutoResizeTextarea
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 dark:text-gray-400 italic placeholder-gray-300"
-                              value={item.notes}
-                              onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
-                              placeholder="Finish / Note"
-                            />
+                            <div className="space-y-2">
+                              <AutoResizeTextarea
+                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 dark:text-gray-400 italic placeholder-gray-300"
+                                value={item.notes}
+                                onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
+                                placeholder="Finish / Note"
+                              />
+                              <button
+                                onClick={() => setSpecEditorState({ isOpen: true, item, categoryId: category.id })}
+                                className={`flex items-center gap-1 text-xs rounded px-2 py-1 transition print:hidden ${item.specs?.detailedDescription || item.specs?.attachments?.length > 0
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                  }`}
+                                title="View or edit detailed specifications"
+                              >
+                                <FileText size={12} />
+                                <span>{item.specs?.detailedDescription || item.specs?.attachments?.length > 0 ? 'View Specs' : 'Add Specs'}</span>
+                                {item.specs?.attachments?.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-blue-600 text-white rounded-full">
+                                    {item.specs.attachments.length}
+                                  </span>
+                                )}
+                              </button>
+                            </div>
                           </td>
                           {/* Delete button - subtle trash icon, hidden when printing */}
                           <td style={{
