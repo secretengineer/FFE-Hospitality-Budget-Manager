@@ -25,7 +25,8 @@ import {
   Book,
   Eye,
   EyeOff,
-  Menu
+  Menu,
+  FileSpreadsheet
 } from 'lucide-react';
 import SpecBookView from './SpecBookView';
 
@@ -420,6 +421,7 @@ export default function App() {
     companyAddress: "1521 Syracuse St, Denver, CO 80220",
     companyPhone: "303 434 4595",
     companyEmail: "pat@patryan.com",
+    companyWebsite: "www.patryan.com",
     logoUrl: "src/assets/PRThingsTempLogo.png", // Placeholder logo URL
 
     // Terms & Conditions
@@ -762,6 +764,7 @@ export default function App() {
         companyAddress: "1521 Syracuse St, Denver, CO 80220",
         companyPhone: "303 434 4595",
         companyEmail: "pat@patryan.com",
+        companyWebsite: "www.patryan.com",
         logoUrl: "src/assets/PRThingsTempLogo.png",
         terms: [
           "1. Estimates are valid for 30 days from date of issue.",
@@ -1000,6 +1003,87 @@ export default function App() {
     }
 
     executeOpen();
+  };
+
+  /**
+   * Export to CSV
+   * Generates a CSV file of the current budget and triggers a download.
+   * Compatible with Excel and Google Sheets.
+   */
+  const handleExportCSV = () => {
+    // Helper to escape CSV fields
+    const escapeCSV = (str) => {
+      if (str === null || str === undefined) return '';
+      const stringValue = String(str);
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    // Build CSV content
+    let csvContent = [];
+    
+    // Project Header
+    csvContent.push(['Project Budget Export']);
+    csvContent.push(['Project Name', escapeCSV(projectInfo.name)]);
+    csvContent.push(['Client', escapeCSV(projectInfo.client)]);
+    csvContent.push(['Date', escapeCSV(projectInfo.date)]);
+    csvContent.push(['Address', escapeCSV(projectInfo.address)]);
+    csvContent.push([]); // Empty row
+
+    // Column Headers
+    const headers = ['Category', 'Vendor', 'Description', 'Dimensions', 'Qty', 'Unit Price', 'Total', 'Taxable', 'Lead Time', 'Status', 'Notes'];
+    csvContent.push(headers);
+
+    // Data Rows
+    categories.forEach(cat => {
+      cat.items.forEach(item => {
+        const itemTotal = (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
+        const row = [
+          escapeCSV(cat.title),
+          escapeCSV(item.mfr),
+          escapeCSV(item.desc),
+          escapeCSV(item.dimensions),
+          item.qty,
+          item.unitPrice,
+          itemTotal,
+          item.isTaxable ? 'Yes' : 'No',
+          escapeCSV(item.leadTime),
+          escapeCSV(item.status),
+          escapeCSV(item.notes)
+        ];
+        csvContent.push(row);
+      });
+      
+      // Category Subtotal
+      const catTotal = totals.categoryTotals[cat.id] || 0;
+      csvContent.push(['', '', '', '', '', 'Subtotal', catTotal, '', '', '', '']);
+      csvContent.push([]); // Empty row between categories
+    });
+
+    // Grand Totals
+    csvContent.push([]);
+    csvContent.push(['', '', '', '', '', 'Grand Total', totals.grandTotal]);
+    csvContent.push(['', '', '', '', '', 'Est. Tax', totals.tax]);
+    csvContent.push(['', '', '', '', '', 'Total w/ Tax', totals.totalWithTax]);
+    csvContent.push(['', '', '', '', '', 'Budget Allowance', projectInfo.allowance]);
+    csvContent.push(['', '', '', '', '', 'Variance', totals.variance]);
+
+    // Convert to CSV string
+    const csvString = csvContent.map(row => row.join(',')).join('\n');
+
+    // Create download link
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const fileName = `${projectInfo.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget.csv`;
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // ============================================================================
@@ -1512,6 +1596,9 @@ export default function App() {
                         <button onClick={() => { handleSaveAs(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             <Copy size={16} className="text-emerald-500" /> Save As...
                         </button>
+                        <button onClick={() => { handleExportCSV(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <FileSpreadsheet size={16} className="text-green-600" /> Export to Excel (CSV)
+                        </button>
                     </div>
 
                     <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
@@ -1538,7 +1625,7 @@ export default function App() {
                         <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">Visible Columns</div>
                         <div className="grid grid-cols-2 gap-1">
                             {[
-                                { id: 'mfr', label: 'Manufacturer' },
+                                { id: 'mfr', label: 'Vendor' },
                                 { id: 'dimensions', label: 'Dimensions' },
                                 { id: 'leadTime', label: 'Lead Time' },
                                 { id: 'status', label: 'Status' },
@@ -1688,12 +1775,12 @@ export default function App() {
           <div className="flex items-start justify-between p-8 pb-6 border-b border-gray-100 dark:border-gray-700 print:border-gray-200">
             <div className="flex gap-6 items-start">
               {/* Logo */}
-              <div className="flex-shrink-0 relative group">
-                <label htmlFor="logo-upload" className="cursor-pointer block relative">
+              <div className="flex-shrink-0 relative group h-24 w-24">
+                <label htmlFor="logo-upload" className="cursor-pointer block relative h-full w-full">
                   <img
                     src={projectInfo.logoUrl}
                     alt={`${projectInfo.companyName} Logo`}
-                    className="w-20 h-20 object-contain rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2 group-hover:border-blue-500 transition-colors"
+                    className="w-full h-full object-contain rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2 group-hover:border-blue-500 transition-colors"
                   />
                   <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
                     <span className="text-white text-xs font-bold">Change</span>
@@ -1701,6 +1788,7 @@ export default function App() {
                 </label>
                 <input
                   id="logo-upload"
+
                   type="file"
                   accept="image/*"
                   onChange={handleLogoUpload}
@@ -1709,40 +1797,79 @@ export default function App() {
               </div>
 
               {/* Company Details */}
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col justify-between h-24 py-1">
                 <input
                   type="text"
                   value={projectInfo.companyName}
                   onChange={(e) => handleProjectUpdate('companyName', e.target.value)}
-                  className="text-xl font-bold text-gray-900 dark:text-white print:text-black border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 placeholder-gray-300 bg-transparent"
+                  className="text-xl font-bold text-gray-900 dark:text-white print:text-black border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 -ml-1 placeholder-gray-300 bg-transparent leading-none"
                   placeholder="Company Name"
                   style={{ outline: 'none' }}
                 />
                 <AutoResizeTextarea
                   value={projectInfo.companyAddress}
                   onChange={(e) => handleProjectUpdate('companyAddress', e.target.value)}
-                  className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-700 border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 bg-transparent"
+                  className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-700 border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 -ml-1 bg-transparent leading-tight resize-none"
                   placeholder="Company Address"
-                  style={{ outline: 'none' }}
+                  style={{ outline: 'none', minHeight: 'auto' }}
                 />
-                <div className="flex gap-3 text-sm text-gray-500 dark:text-gray-500 print:text-gray-600 mt-1">
-                  <input
+                
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-500 print:text-gray-600">
+                   {/* Phone */}
+                   <input
                     type="text"
                     value={projectInfo.companyPhone}
                     onChange={(e) => handleProjectUpdate('companyPhone', e.target.value)}
-                    className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 bg-transparent w-32"
+                    className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 -ml-1 bg-transparent w-28"
                     placeholder="Phone"
                     style={{ outline: 'none' }}
                   />
-                  <span className="text-gray-300">•</span>
-                  <input
-                    type="email"
-                    value={projectInfo.companyEmail}
-                    onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
-                    className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 bg-transparent flex-1"
-                    placeholder="Email"
-                    style={{ outline: 'none' }}
-                  />
+                  
+                  {/* Email with Mailto */}
+                  <div className="flex items-center group/email relative">
+                    <span className="text-gray-300 mr-2">•</span>
+                    <input
+                        type="email"
+                        value={projectInfo.companyEmail}
+                        onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
+                        className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 bg-transparent w-40"
+                        placeholder="Email"
+                        style={{ outline: 'none' }}
+                    />
+                    {projectInfo.companyEmail && (
+                        <a 
+                            href={`mailto:${projectInfo.companyEmail}`}
+                            className="ml-1 opacity-0 group-hover/email:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity print:hidden"
+                            title="Send Email"
+                        >
+                            <ExternalLink size={12} />
+                        </a>
+                    )}
+                  </div>
+
+                  {/* Website with Link */}
+                  <div className="flex items-center group/web relative">
+                    <span className="text-gray-300 mr-2">•</span>
+                    <input
+                        type="text"
+                        value={projectInfo.companyWebsite}
+                        onChange={(e) => handleProjectUpdate('companyWebsite', e.target.value)}
+                        className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 bg-transparent w-40"
+                        placeholder="Website"
+                        style={{ outline: 'none' }}
+                    />
+                    {projectInfo.companyWebsite && (
+                        <a 
+                            href={projectInfo.companyWebsite.startsWith('http') ? projectInfo.companyWebsite : `https://${projectInfo.companyWebsite}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-1 opacity-0 group-hover/web:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity print:hidden"
+                            title="Open Website"
+                        >
+                            <ExternalLink size={12} />
+                        </a>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1912,7 +2039,7 @@ export default function App() {
                       <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase">
                         <th style={{ padding: '12px 16px', width: '40px', textAlign: 'left' }}>#</th>
                         {visibleColumns.status && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'center' }}>Status</th>}
-                        {visibleColumns.mfr && <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Manufacturer</th>}
+                        {visibleColumns.mfr && <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Vendor</th>}
                         <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
                         {visibleColumns.dimensions && <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>}
                         {visibleColumns.qty && <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>}
@@ -1975,7 +2102,7 @@ export default function App() {
                               className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
                               value={item.mfr}
                               onChange={(e) => updateItem(category.id, item.id, 'mfr', e.target.value)}
-                              placeholder="Mfr Name"
+                              placeholder="Vendor Name"
                             />
                           </td>
                           )}

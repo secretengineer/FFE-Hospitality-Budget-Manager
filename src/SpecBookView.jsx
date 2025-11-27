@@ -93,7 +93,7 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 z-50 text-gray-800 dark:text-gray-100">
                   <div className="text-xs font-bold text-gray-500 uppercase px-2 py-1 mb-1">Toggle Columns</div>
                   {[
-                    { key: 'mfr', label: 'Manufacturer' },
+                    { key: 'mfr', label: 'Vendor' },
                     { key: 'dimensions', label: 'Dimensions' },
                     { key: 'qty', label: 'Quantity' },
                     { key: 'unitPrice', label: 'Unit Price' },
@@ -220,7 +220,7 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                             {refId}
                           </span>
                           <h3 className="text-lg font-bold text-gray-900">{item.desc}</h3>
-                          <span className="text-sm text-gray-500 font-medium ml-auto">{item.mfr || 'Manufacturer TBD'}</span>
+                          <span className="text-sm text-gray-500 font-medium ml-auto">{item.mfr || 'Vendor TBD'}</span>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -345,7 +345,7 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                             <h3 className="text-lg font-bold text-gray-900">{item.desc}</h3>
                           </div>
                           <p className="text-sm text-gray-500 font-medium">
-                            {visibleColumns.mfr ? (item.mfr || 'Manufacturer TBD') : ''}
+                            {visibleColumns.mfr ? (item.mfr || 'Vendor TBD') : ''}
                           </p>
                         </div>
 
