@@ -1,17 +1,24 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Printer, 
-  Plus, 
-  Trash2, 
-  Layout, 
-  Armchair, 
-  Lightbulb, 
-  Signpost, 
-  TreePine, 
+import {
+  Printer,
+  Plus,
+  Trash2,
+  Layout,
+  Armchair,
+  Lightbulb,
+  Signpost,
+  TreePine,
   Briefcase,
   Save,
   FolderOpen,
-  FileText
+  FileText,
+  Moon,
+  Sun,
+  Settings,
+  X,
+  ArrowUp,
+  ArrowDown,
+  Copy
 } from 'lucide-react';
 
 // ============================================================================
@@ -29,7 +36,7 @@ import {
  * @returns {JSX.Element} Styled card container
  */
 const Card = ({ children, className = "" }) => (
-  <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
+  <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 ${className}`}>
     {children}
   </div>
 );
@@ -50,22 +57,22 @@ const Card = ({ children, className = "" }) => (
  * @returns {JSX.Element} Styled section header
  */
 const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-100 rounded-t-lg print:bg-white">
+  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 rounded-t-lg print:bg-white">
     <div className="flex items-center gap-3 flex-1">
-      <div className={`p-2 rounded-md ${colorClass} bg-opacity-10`}>
+      <div className={`p-2 rounded-md ${colorClass} bg-opacity-10 dark:bg-opacity-20`}>
         <Icon size={20} className={colorClass} />
       </div>
       <input
         type="text"
         value={title}
         onChange={(e) => onTitleChange && onTitleChange(e.target.value)}
-        className="font-bold text-lg text-gray-800 uppercase tracking-wide bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1"
+        className="font-bold text-lg text-gray-800 dark:text-gray-100 uppercase tracking-wide bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1"
         style={{ outline: 'none' }}
       />
       {onDelete && (
         <button
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-2 hover:bg-red-100 rounded text-red-600 print:hidden"
+          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-600 dark:text-red-400 print:hidden"
           title="Delete Section"
         >
           <Trash2 size={16} />
@@ -73,8 +80,8 @@ const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800",
       )}
     </div>
     <div className="text-right">
-      <div className="text-xs text-gray-500 font-medium uppercase">Subtotal</div>
-      <div className="font-bold text-xl font-mono">{total}</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase">Subtotal</div>
+      <div className="font-bold text-xl font-mono text-gray-900 dark:text-white">{total}</div>
     </div>
   </div>
 );
@@ -97,11 +104,11 @@ const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800",
  * 
  * @returns {JSX.Element} Complete budget management application
  */
-export default function App() { 
+export default function App() {
   // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
-  
+
   /**
    * Project Information State
    * Stores all project-specific details including client info, budget allowance,
@@ -115,7 +122,7 @@ export default function App() {
     client: "Development Group LLC",
     allowance: 750000, // Total budget allowance in USD
     salesTaxRate: 10.25, // Tax rate as percentage (e.g., 10.25%)
-    
+
     // Company Branding
     companyName: "Pat Ryan Things LLC.",
     companyAddress: "1521 Syracuse St, Denver, CO 80220",
@@ -144,6 +151,7 @@ export default function App() {
    * - qty: Quantity ordered
    * - unitPrice: Price per unit in USD
    * - leadTime: Expected delivery or production time
+   * - status: Item status (Draft, Approved, Ordered, Received)
    * - notes: Additional information (finish, color, special instructions)
    */
   const [categories, setCategories] = useState([
@@ -153,9 +161,9 @@ export default function App() {
       icon: Armchair,
       color: 'text-blue-600',
       items: [
-        { id: 1, mfr: 'Industry West', desc: 'Dining Chairs - Main Hall', dimensions: '22"W x 24"D', qty: 50, unitPrice: 170, leadTime: '8 Weeks', notes: 'Walnut Finish' },
-        { id: 2, mfr: 'Grand Rapids', desc: 'Bar Stools - Central Bar', dimensions: '18" Round', qty: 46, unitPrice: 225, leadTime: '10 Weeks', notes: 'Leather Seat' },
-        { id: 3, mfr: 'Custom', desc: 'Community Tables', dimensions: '120"L x 40"W', qty: 4, unitPrice: 2500, leadTime: '12 Weeks', notes: 'Reclaimed Oak' },
+        { id: 1, mfr: 'Industry West', desc: 'Dining Chairs - Main Hall', dimensions: '22"W x 24"D', qty: 50, unitPrice: 170, leadTime: '8 Weeks', status: 'Ordered', notes: 'Walnut Finish' },
+        { id: 2, mfr: 'Grand Rapids', desc: 'Bar Stools - Central Bar', dimensions: '18" Round', qty: 46, unitPrice: 225, leadTime: '10 Weeks', status: 'Approved', notes: 'Leather Seat' },
+        { id: 3, mfr: 'Custom', desc: 'Community Tables', dimensions: '120"L x 40"W', qty: 4, unitPrice: 2500, leadTime: '12 Weeks', status: 'Draft', notes: 'Reclaimed Oak' },
       ]
     },
     {
@@ -216,6 +224,32 @@ export default function App() {
    */
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  /**
+   * Print Settings State
+   * Controls the layout and formatting of the printed document.
+   */
+  const [printSettings, setPrintSettings] = useState({
+    paperSize: 'letter', // 'letter', 'legal', 'tabloid', 'a4'
+    orientation: 'landscape', // 'portrait', 'landscape'
+    scale: 100,
+    showFooter: true
+  });
+
+  const [showPrintModal, setShowPrintModal] = useState(false);
+
+  /**
+   * Dark Mode State
+   * Manages application theme preference.
+   * Persists to localStorage.
+   */
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' ||
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
   // ============================================================================
   // EFFECT HOOKS
   // ============================================================================
@@ -228,6 +262,72 @@ export default function App() {
   useEffect(() => {
     setHasUnsavedChanges(true);
   }, [projectInfo, categories]);
+
+  /**
+   * Auto-save Effect
+   * Saves current state to localStorage on every change.
+   * Debounced to prevent excessive writes.
+   */
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const stateToSave = {
+        version: '1.0',
+        savedAt: new Date().toISOString(),
+        projectInfo,
+        categories: categories.map(cat => ({
+          id: cat.id,
+          title: cat.title,
+          color: cat.color,
+          items: cat.items
+        }))
+      };
+      localStorage.setItem('ffe_autosave', JSON.stringify(stateToSave));
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [projectInfo, categories]);
+
+  /**
+   * Recovery Effect
+   * Checks for auto-saved data on mount and prompts user to restore.
+   */
+  useEffect(() => {
+    const savedState = localStorage.getItem('ffe_autosave');
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState);
+        // Simple check to see if it's different from default/empty
+        // In a real app, might want more robust comparison or timestamp check
+        const hasData = parsedState.categories.some(cat => cat.items.length > 0 && (cat.items[0].desc !== '' || cat.items.length > 1));
+
+        if (hasData) {
+          const shouldRestore = window.confirm('Found an unsaved draft from a previous session. Would you like to restore it?');
+          if (shouldRestore) {
+            // Icon mapping for reconstructing categories
+            const iconMap = {
+              'foh': { icon: Armchair, color: 'text-blue-600' },
+              'custom': { icon: Lightbulb, color: 'text-amber-600' },
+              'wayfinding': { icon: Signpost, color: 'text-purple-600' },
+              'exterior': { icon: TreePine, color: 'text-emerald-600' },
+              'fees': { icon: Briefcase, color: 'text-gray-600' }
+            };
+
+            const loadedCategories = parsedState.categories.map(cat => ({
+              ...cat,
+              icon: iconMap[cat.id]?.icon || Layout,
+              color: cat.color || iconMap[cat.id]?.color || 'text-gray-600'
+            }));
+
+            setProjectInfo(parsedState.projectInfo);
+            setCategories(loadedCategories);
+            setHasUnsavedChanges(true); // Mark as unsaved since it's restored from local storage
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse auto-save data', e);
+      }
+    }
+  }, []); // Run once on mount
 
   /**
    * Unsaved Changes Warning
@@ -244,6 +344,20 @@ export default function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
+
+  /**
+   * Dark Mode Effect
+   * Updates the DOM and localStorage when theme changes.
+   */
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
 
   // ============================================================================
   // UTILITY FUNCTIONS & CALCULATIONS
@@ -339,7 +453,7 @@ export default function App() {
         icon: Armchair,
         color: 'text-blue-600',
         items: [
-          { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', notes: '' }
+          { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '' }
         ]
       }
     ]);
@@ -539,7 +653,7 @@ export default function App() {
         return; // Don't update with invalid value
       }
     }
-    
+
     setProjectInfo(prev => ({ ...prev, [field]: value }));
   };
 
@@ -563,7 +677,7 @@ export default function App() {
         return; // Don't update with invalid value
       }
     }
-    
+
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
       return {
@@ -592,9 +706,10 @@ export default function App() {
       qty: 1,
       unitPrice: 0,
       leadTime: '',
+      status: 'Draft',
       notes: ''
     };
-    
+
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
       return { ...cat, items: [...cat.items, newItem] };
@@ -613,7 +728,7 @@ export default function App() {
     // Log removal action for audit trail
     console.log(`Attempting to remove item ${itemId} from category ${catId}`);
     console.log('Current categories:', categories);
-    
+
     setCategories(prev => {
       const updated = prev.map(cat => {
         if (cat.id !== catId) return cat;
@@ -638,7 +753,7 @@ export default function App() {
       icon: Layout,
       color: 'text-gray-600',
       items: [
-        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', notes: '' }
+        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '' }
       ]
     };
     setCategories(prev => [...prev, newCategory]);
@@ -681,7 +796,14 @@ export default function App() {
    * CSS print styles are applied automatically via @media print rules.
    */
   const handlePrint = () => {
-    window.print();
+    setShowPrintModal(true);
+  };
+
+  const executePrint = () => {
+    setShowPrintModal(false);
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   // ============================================================================
@@ -689,8 +811,8 @@ export default function App() {
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-800 print:bg-white pb-20">
-      
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans text-gray-800 dark:text-gray-100 print:bg-white pb-20 transition-colors duration-200">
+
       {/* ===== TOP NAVIGATION BAR ===== */}
       {/* Hidden when printing, provides app branding and file/print functionality */}
       <div className="bg-slate-900 text-white shadow-lg print:hidden">
@@ -702,31 +824,31 @@ export default function App() {
               {hasUnsavedChanges && <span className="text-yellow-400 ml-2">*</span>}
             </h1>
           </div>
-          
+
           {/* File Management & Print Buttons */}
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={handleNewDocument}
               className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
               title="New Document"
             >
               <FileText size={16} /> New
             </button>
-            <button 
+            <button
               onClick={handleOpen}
               className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
               title="Open Document"
             >
               <FolderOpen size={16} /> Open
             </button>
-            <button 
+            <button
               onClick={handleSave}
               className="flex items-center gap-2 bg-green-700 hover:bg-green-600 transition px-3 py-2 rounded-md text-sm font-semibold"
               title="Save Document"
             >
               <Save size={16} /> Save
             </button>
-            <button 
+            <button
               onClick={handleSaveAs}
               className="flex items-center gap-2 bg-green-700 hover:bg-green-600 transition px-3 py-2 rounded-md text-sm font-semibold"
               title="Save As..."
@@ -734,59 +856,158 @@ export default function App() {
               <Save size={16} /> Save As
             </button>
             <div className="w-px h-8 bg-gray-600 mx-1"></div>
-            <button 
+            <button
               onClick={handlePrint}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition px-4 py-2 rounded-md text-sm font-semibold"
             >
               <Printer size={16} /> Print / Save PDF
             </button>
+            <div className="w-px h-8 bg-gray-600 mx-1"></div>
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2 rounded-md hover:bg-gray-700 transition text-gray-300 hover:text-white"
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
           </div>
         </div>
       </div>
 
+      {/* ===== PRINT SETTINGS MODAL ===== */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Settings size={20} /> Print Settings
+              </h3>
+              <button
+                onClick={() => setShowPrintModal(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Paper Size</label>
+                <select
+                  value={printSettings.paperSize}
+                  onChange={(e) => setPrintSettings(prev => ({ ...prev, paperSize: e.target.value }))}
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="letter">Letter (8.5" x 11")</option>
+                  <option value="legal">Legal (8.5" x 14")</option>
+                  <option value="tabloid">Tabloid (11" x 17")</option>
+                  <option value="a4">A4 (210mm x 297mm)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Orientation</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="orientation"
+                      value="portrait"
+                      checked={printSettings.orientation === 'portrait'}
+                      onChange={(e) => setPrintSettings(prev => ({ ...prev, orientation: e.target.value }))}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">Portrait</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="orientation"
+                      value="landscape"
+                      checked={printSettings.orientation === 'landscape'}
+                      onChange={(e) => setPrintSettings(prev => ({ ...prev, orientation: e.target.value }))}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">Landscape</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scale ({printSettings.scale}%)</label>
+                <input
+                  type="range"
+                  min="50"
+                  max="150"
+                  step="5"
+                  value={printSettings.scale}
+                  onChange={(e) => setPrintSettings(prev => ({ ...prev, scale: parseInt(e.target.value) }))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => setShowPrintModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executePrint}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center justify-center gap-2"
+              >
+                <Printer size={16} /> Print
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        
+
         {/* ===== HEADER SECTION ===== */}
         {/* Company branding and project information displayed at top of document */}
         <Card className="mb-8 p-6 print:shadow-none print:border-none print:p-0">
           <div className="flex flex-col lg:flex-row justify-between gap-8">
-            
+
             {/* Company Branding Column (Left) */}
             {/* Displays company logo, name, address, and contact information */}
             <div className="flex flex-col gap-1 w-full lg:w-1/3 border-b lg:border-b-0 lg:border-r border-gray-200 lg:pr-8 pb-4 lg:pb-0">
-              <img 
-                src={projectInfo.logoUrl} 
+              <img
+                src={projectInfo.logoUrl}
                 alt={`${projectInfo.companyName} Logo`}
-                className="w-[72px] h-[72px] object-contain mb-2 rounded-lg border border-gray-100" 
+                className="w-[72px] h-[72px] object-contain mb-2 rounded-lg border border-gray-100"
               />
-              <input 
-                type="text" 
-                value={projectInfo.companyName} 
+              <input
+                type="text"
+                value={projectInfo.companyName}
                 onChange={(e) => handleProjectUpdate('companyName', e.target.value)}
-                className="text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 placeholder-gray-300 bg-transparent"
+                className="text-xl font-bold text-gray-900 dark:text-white border-none focus:ring-0 p-0 placeholder-gray-300 bg-transparent"
                 placeholder="Company Name"
               />
-              <input 
-                type="text" 
-                value={projectInfo.companyAddress} 
+              <input
+                type="text"
+                value={projectInfo.companyAddress}
                 onChange={(e) => handleProjectUpdate('companyAddress', e.target.value)}
-                className="text-sm text-gray-600 border-none focus:ring-0 p-0 resize-none bg-transparent"
+                className="text-sm text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
                 placeholder="Company Address"
               />
-              <div className="text-sm text-gray-600 mt-1">
-                <input 
-                    type="text" 
-                    value={projectInfo.companyPhone} 
-                    onChange={(e) => handleProjectUpdate('companyPhone', e.target.value)}
-                    className="text-sm text-gray-600 border-none focus:ring-0 p-0 resize-none bg-transparent"
-                    placeholder="Phone"
-                /> | 
-                <input 
-                    type="email" 
-                    value={projectInfo.companyEmail} 
-                    onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
-                    className="text-sm text-gray-600 border-none focus:ring-0 p-0 resize-none bg-transparent"
-                    placeholder="Email"
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <input
+                  type="text"
+                  value={projectInfo.companyPhone}
+                  onChange={(e) => handleProjectUpdate('companyPhone', e.target.value)}
+                  className="text-sm text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
+                  placeholder="Phone"
+                /> |
+                <input
+                  type="email"
+                  value={projectInfo.companyEmail}
+                  onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
+                  className="text-sm text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
+                  placeholder="Email"
                 />
               </div>
             </div>
@@ -794,46 +1015,46 @@ export default function App() {
             {/* Project Details Columns (Right) */}
             {/* Editable fields for project name, client, date, and location */}
             <div className="w-full lg:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Project Name</label>
-                  <input 
-                    type="text" 
-                    value={projectInfo.name} 
-                    onChange={(e) => handleProjectUpdate('name', e.target.value)}
-                    className="w-full text-3xl font-bold text-gray-900 border-none focus:ring-0 p-0 placeholder-gray-300 bg-transparent"
-                    placeholder="Project Name"
-                  />
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Client</label>
-                        <input 
-                        type="text" 
-                        value={projectInfo.client} 
-                        onChange={(e) => handleProjectUpdate('client', e.target.value)}
-                        className="w-full text-sm font-medium text-gray-700 border-b border-gray-200 focus:border-blue-500 focus:ring-0 px-0 py-1 bg-transparent"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Date</label>
-                        <input 
-                        type="date" 
-                        value={projectInfo.date} 
-                        onChange={(e) => handleProjectUpdate('date', e.target.value)}
-                        className="w-full text-sm font-medium text-gray-700 border-b border-gray-200 focus:border-blue-500 focus:ring-0 px-0 py-1 bg-transparent"
-                        />
-                    </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Project Name</label>
+                <input
+                  type="text"
+                  value={projectInfo.name}
+                  onChange={(e) => handleProjectUpdate('name', e.target.value)}
+                  className="w-full text-3xl font-bold text-gray-900 dark:text-white border-none focus:ring-0 p-0 placeholder-gray-300 bg-transparent"
+                  placeholder="Project Name"
+                />
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Client</label>
+                    <input
+                      type="text"
+                      value={projectInfo.client}
+                      onChange={(e) => handleProjectUpdate('client', e.target.value)}
+                      className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-0 px-0 py-1 bg-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={projectInfo.date}
+                      onChange={(e) => handleProjectUpdate('date', e.target.value)}
+                      className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-0 px-0 py-1 bg-transparent dark:[color-scheme:dark]"
+                    />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Location / Address</label>
-                  <textarea 
-                    value={projectInfo.address} 
-                    onChange={(e) => handleProjectUpdate('address', e.target.value)}
-                    rows={3}
-                    className="w-full text-lg text-gray-600 border-none focus:ring-0 p-0 resize-none bg-transparent"
-                    placeholder="Project Address"
-                  />
-                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Location / Address</label>
+                <textarea
+                  value={projectInfo.address}
+                  onChange={(e) => handleProjectUpdate('address', e.target.value)}
+                  rows={3}
+                  className="w-full text-lg text-gray-600 dark:text-gray-400 border-none focus:ring-0 p-0 resize-none bg-transparent"
+                  placeholder="Project Address"
+                />
+              </div>
             </div>
           </div>
         </Card>
@@ -846,11 +1067,11 @@ export default function App() {
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Budget Allowance</div>
             <div className="flex items-center gap-2">
               <span className="text-gray-400 text-lg">$</span>
-              <input 
+              <input
                 type="number"
                 value={projectInfo.allowance}
                 onChange={(e) => handleProjectUpdate('allowance', parseFloat(e.target.value))}
-                className="text-2xl font-bold text-gray-800 w-full border-none focus:ring-0 p-0 bg-transparent"
+                className="text-2xl font-bold text-gray-800 dark:text-white w-full border-none focus:ring-0 p-0 bg-transparent"
               />
             </div>
           </Card>
@@ -858,7 +1079,7 @@ export default function App() {
           {/* FF&E Subtotal Card - Calculated from all line items (pre-tax) */}
           <Card className="p-5 border-l-4 border-gray-400">
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">FF&E Subtotal</div>
-            <div className="text-2xl font-bold text-gray-800">
+            <div className="text-2xl font-bold text-gray-800 dark:text-white">
               {formatCurrency(totals.grandTotal)}
             </div>
             <div className="text-xs text-gray-400 mt-1">Before Tax</div>
@@ -867,18 +1088,18 @@ export default function App() {
           {/* Tax Card - Shows calculated tax with editable rate */}
           <Card className="p-5 border-l-4 border-gray-400">
             <div className="flex justify-between items-center mb-1">
-                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Est. Tax Total</div>
-                <div className="flex items-center gap-1">
-                    <input 
-                        type="number" 
-                        value={projectInfo.salesTaxRate}
-                        onChange={(e) => handleProjectUpdate('salesTaxRate', parseFloat(e.target.value))}
-                        className="w-12 text-xs text-right border-none p-0 bg-gray-100 rounded focus:ring-0"
-                    />
-                    <span className="text-xs text-gray-500">%</span>
-                </div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Est. Tax Total</div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={projectInfo.salesTaxRate}
+                  onChange={(e) => handleProjectUpdate('salesTaxRate', parseFloat(e.target.value))}
+                  className="w-12 text-xs text-right border-none p-0 bg-gray-100 dark:bg-gray-700 dark:text-gray-200 rounded focus:ring-0"
+                />
+                <span className="text-xs text-gray-500">%</span>
+              </div>
             </div>
-            <div className="text-2xl font-bold text-gray-800">
+            <div className="text-2xl font-bold text-gray-800 dark:text-white">
               {formatCurrency(totals.tax)}
             </div>
             <div className="text-xs text-gray-400 mt-1">Total w/ Tax: {formatCurrency(totals.totalWithTax)}</div>
@@ -886,7 +1107,7 @@ export default function App() {
 
           {/* Budget Variance Card - Shows over/under budget status with color coding */}
           {/* Green background = under budget, Red background = over budget */}
-          <Card className={`p-5 border-l-4 ${totals.variance >= 0 ? 'border-emerald-500 bg-emerald-50' : 'border-rose-500 bg-rose-50'}`}>
+          <Card className={`p-5 border-l-4 ${totals.variance >= 0 ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-rose-500 bg-rose-50 dark:bg-rose-900/20'}`}>
             <div className={`text-xs font-bold uppercase tracking-wider mb-1 ${totals.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               Budget Variance
             </div>
@@ -905,56 +1126,57 @@ export default function App() {
           {categories.map((category) => (
             <div key={category.id} className="break-inside-avoid group">
               <Card className="overflow-hidden">
-                <SectionHeader 
-                  icon={category.icon} 
-                  title={category.title} 
-                  total={formatCurrency(totals.categoryTotals[category.id])} 
+                <SectionHeader
+                  icon={category.icon}
+                  title={category.title}
+                  total={formatCurrency(totals.categoryTotals[category.id])}
                   colorClass={category.color}
                   onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
                   onDelete={() => removeCategory(category.id)}
                 />
-                
+
                 {/* Line Items Table */}
                 {/* Responsive table with inline editing and dynamic column widths */}
                 <div className="overflow-x-auto">
                   <table style={{ width: '100%', fontSize: '14px', tableLayout: 'auto', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr style={{ backgroundColor: '#f9fafb', color: '#6b7280', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase' }}>
+                      <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase">
                         <th style={{ padding: '12px 16px', width: '40px', textAlign: 'left' }}>#</th>
                         <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Manufacturer</th>
                         <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
                         <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>
                         <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>
+                        <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Status</th>
                         <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>
                         <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>
                         <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>
                         <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>
-                        <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>
+                        <th style={{ padding: '12px 16px', width: '90px', textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {/* Map through each line item in category */}
                       {category.items.map((item, index) => (
-                        <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
+                        <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
                           {/* Row number (1-indexed for user readability) */}
                           <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
                           {/* Manufacturer/Vendor field */}
                           <td style={{ padding: '8px 16px' }}>
-                            <textarea 
-                              style={{ 
-                                width: '100%', 
+                            <textarea
+                              style={{
+                                width: '100%',
                                 minHeight: '32px',
-                                backgroundColor: 'transparent', 
-                                border: '1px solid transparent', 
+                                backgroundColor: 'transparent',
+                                border: '1px solid transparent',
                                 borderRadius: '4px',
                                 padding: '4px',
                                 fontSize: '14px',
                                 fontWeight: '500',
-                                color: '#111827',
                                 resize: 'vertical',
                                 fontFamily: 'inherit',
                                 lineHeight: '1.5'
                               }}
+                              className="text-gray-900 dark:text-gray-100"
                               value={item.mfr}
                               onChange={(e) => updateItem(category.id, item.id, 'mfr', e.target.value)}
                               placeholder="Mfr Name"
@@ -965,20 +1187,20 @@ export default function App() {
                           </td>
                           {/* Item description field */}
                           <td style={{ padding: '8px 16px' }}>
-                            <textarea 
-                              style={{ 
-                                width: '100%', 
+                            <textarea
+                              style={{
+                                width: '100%',
                                 minHeight: '32px',
-                                backgroundColor: 'transparent', 
-                                border: '1px solid transparent', 
+                                backgroundColor: 'transparent',
+                                border: '1px solid transparent',
                                 borderRadius: '4px',
                                 padding: '4px',
                                 fontSize: '14px',
-                                color: '#111827',
                                 resize: 'vertical',
                                 fontFamily: 'inherit',
                                 lineHeight: '1.5'
                               }}
+                              className="text-gray-900 dark:text-gray-100"
                               value={item.desc}
                               onChange={(e) => updateItem(category.id, item.id, 'desc', e.target.value)}
                               placeholder="Item Description"
@@ -989,8 +1211,8 @@ export default function App() {
                           </td>
                           {/* Dimensions field */}
                           <td className="px-4 py-2">
-                            <input 
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 placeholder-gray-300"
+                            <input
+                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
                               value={item.dimensions}
                               onChange={(e) => updateItem(category.id, item.id, 'dimensions', e.target.value)}
                               placeholder='Dimensions'
@@ -998,18 +1220,32 @@ export default function App() {
                           </td>
                           {/* Lead time field */}
                           <td className="px-4 py-2">
-                            <input 
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 placeholder-gray-300"
+                            <input
+                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
                               value={item.leadTime}
                               onChange={(e) => updateItem(category.id, item.id, 'leadTime', e.target.value)}
                               placeholder='L/T'
                             />
                           </td>
+                          {/* Status field */}
+                          <td className="px-4 py-2">
+                            <select
+                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300"
+                              value={item.status || 'Draft'}
+                              onChange={(e) => updateItem(category.id, item.id, 'status', e.target.value)}
+                            >
+                              <option value="Draft">Draft</option>
+                              <option value="Approved">Approved</option>
+                              <option value="Ordered">Ordered</option>
+                              <option value="Received">Received</option>
+                              <option value="Installed">Installed</option>
+                            </select>
+                          </td>
                           {/* Quantity field - highlighted with blue background */}
                           <td className="px-4 py-2">
-                            <input 
+                            <input
                               type="number"
-                              className="w-full bg-blue-50/50 border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-center font-bold text-gray-900"
+                              className="w-full bg-blue-50/50 dark:bg-blue-900/20 border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-center font-bold text-gray-900 dark:text-white"
                               value={item.qty}
                               onChange={(e) => updateItem(category.id, item.id, 'qty', parseFloat(e.target.value) || 0)}
                             />
@@ -1017,35 +1253,35 @@ export default function App() {
                           {/* Unit price field with dollar sign prefix */}
                           <td className="px-4 py-2">
                             <div className="relative">
-                                <span className="absolute left-1 top-1 text-gray-400 text-xs">$</span>
-                                <input 
+                              <span className="absolute left-1 top-1 text-gray-400 text-xs">$</span>
+                              <input
                                 type="number"
-                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 pl-4 text-right text-gray-600"
+                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 pl-4 text-right text-gray-600 dark:text-gray-300"
                                 value={item.unitPrice}
                                 onChange={(e) => updateItem(category.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                />
+                              />
                             </div>
                           </td>
                           {/* Calculated total for this line (qty × unit price) */}
-                          <td className="px-4 py-3 text-right font-medium text-gray-900 bg-gray-50/50">
+                          <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white bg-gray-50/50 dark:bg-gray-700/30">
                             {formatCurrency(item.qty * item.unitPrice)}
                           </td>
                           {/* Notes field - for finish, color, or special instructions */}
                           <td className="px-4 py-2">
-                            <input 
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 italic placeholder-gray-300"
+                            <input
+                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 dark:text-gray-400 italic placeholder-gray-300"
                               value={item.notes}
                               onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
                               placeholder="Finish / Note"
                             />
                           </td>
                           {/* Delete button - subtle trash icon, hidden when printing */}
-                          <td style={{ 
-                            padding: '8px', 
-                            textAlign: 'center', 
+                          <td style={{
+                            padding: '8px',
+                            textAlign: 'center',
                             display: 'table-cell'
                           }}>
-                            <button 
+                            <button
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -1054,8 +1290,8 @@ export default function App() {
                               aria-label="Delete item"
                               title="Delete this item"
                               type="button"
-                              style={{ 
-                                display: 'inline-flex', 
+                              style={{
+                                display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 padding: '4px',
@@ -1073,19 +1309,44 @@ export default function App() {
                             >
                               <Trash2 size={16} />
                             </button>
+                            <button
+                              onClick={() => duplicateItem(category.id, item)}
+                              className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 p-1"
+                              title="Duplicate Item"
+                            >
+                              <Copy size={16} />
+                            </button>
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => moveItem(category.id, index, 'up')}
+                                disabled={index === 0}
+                                className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
+                                title="Move Up"
+                              >
+                                <ArrowUp size={12} />
+                              </button>
+                              <button
+                                onClick={() => moveItem(category.id, index, 'down')}
+                                disabled={index === category.items.length - 1}
+                                className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
+                                title="Move Down"
+                              >
+                                <ArrowDown size={12} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                
+
                 {/* Add Item Button - Visible in browser, hidden when printing */}
-                <div style={{ backgroundColor: '#f9fafb', padding: '12px', borderTop: '1px solid #e5e7eb', display: 'block' }}>
-                  <button 
+                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 border-t border-gray-200 dark:border-gray-700 block">
+                  <button
                     onClick={() => addItem(category.id)}
                     aria-label={`Add item to ${category.title}`}
-                    style={{ 
+                    style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '8px',
@@ -1107,12 +1368,12 @@ export default function App() {
               </Card>
             </div>
           ))}
-          
+
           {/* Add New Section Button */}
           <div className="print:hidden">
             <button
               onClick={addCategory}
-              className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-gray-600 hover:text-blue-600 font-semibold"
+              className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-semibold"
             >
               <Plus size={20} />
               Add New Section
@@ -1140,15 +1401,15 @@ export default function App() {
         </div>
 
       </div>
-      
+
       {/* ===== PRINT STYLES ===== */}
       {/* Inline styles for print media - controls page layout, margins, and footer content */}
       <style>{`
         @media print {
           /* Configure print page settings with margins and automatic footer content */
           @page {
-              size: A4 landscape;
-              margin: 1.5cm 1.5cm 1.5cm 1.5cm;
+              size: ${printSettings.paperSize} ${printSettings.orientation};
+              margin: 1.0cm;
 
               @bottom-center {
                   content: "Page " counter(page) " of " counter(pages);
@@ -1174,6 +1435,9 @@ export default function App() {
           
           body { 
             -webkit-print-color-adjust: exact; 
+            transform: scale(${printSettings.scale / 100});
+            transform-origin: top left;
+            width: ${100 * (100 / printSettings.scale)}%;
           }
           
           .print\\:hidden { 
