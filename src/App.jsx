@@ -302,6 +302,13 @@ export default function App() {
     companyPhone: "303 434 4595",
     companyEmail: "pat@patryan.com",
     logoUrl: "src/assets/PRThingsTempLogo.png", // Placeholder logo URL
+
+    // Terms & Conditions
+    terms: [
+      "1. Estimates are valid for 30 days from date of issue.",
+      "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+      "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+    ]
   });
 
   /**
@@ -620,6 +627,11 @@ export default function App() {
       companyPhone: "303 434 4595",
       companyEmail: "pat@patryan.com",
       logoUrl: "src/assets/PRThingsTempLogo.png",
+      terms: [
+        "1. Estimates are valid for 30 days from date of issue.",
+        "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+        "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+      ]
     });
 
     setCategories([
@@ -629,7 +641,7 @@ export default function App() {
         icon: Armchair,
         color: 'text-blue-600',
         items: [
-          { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '' }
+          { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
         ]
       }
     ]);
@@ -786,7 +798,6 @@ export default function App() {
         'fees': { icon: Briefcase, color: 'text-gray-600' }
       };
 
-      // Reconstruct categories with icons
       // Reconstruct categories with icons and sanitize items
       const loadedCategories = (Array.isArray(documentData.categories) ? documentData.categories : []).map(cat => ({
         ...cat,
@@ -798,13 +809,25 @@ export default function App() {
             ...item,
             // Ensure numeric values are numbers
             qty: Number(item.qty) || 0,
-            unitPrice: Number(item.unitPrice) || 0
+            unitPrice: Number(item.unitPrice) || 0,
+            // Add specs field for backward compatibility with old files
+            specs: item.specs || { detailedDescription: '', attachments: [] }
           }))
           : []
       }));
 
-      // Load data into state
-      setProjectInfo(documentData.projectInfo);
+      // Load data into state with backward compatibility
+      const loadedProjectInfo = {
+        ...documentData.projectInfo,
+        // Add default terms if not present in old files
+        terms: documentData.projectInfo.terms || [
+          "1. Estimates are valid for 30 days from date of issue.",
+          "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+          "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+        ]
+      };
+
+      setProjectInfo(loadedProjectInfo);
       setCategories(loadedCategories);
       setFileHandle(handle);
       setHasUnsavedChanges(false);
@@ -1038,10 +1061,25 @@ export default function App() {
         const loadedCategories = parsedState.categories.map(cat => ({
           ...cat,
           icon: iconMap[cat.id]?.icon || Layout,
-          color: cat.color || iconMap[cat.id]?.color || 'text-gray-600'
+          color: cat.color || iconMap[cat.id]?.color || 'text-gray-600',
+          // Add specs for backward compatibility
+          items: cat.items.map(item => ({
+            ...item,
+            specs: item.specs || { detailedDescription: '', attachments: [] }
+          }))
         }));
 
-        setProjectInfo(parsedState.projectInfo);
+        // Add default terms if not present
+        const loadedProjectInfo = {
+          ...parsedState.projectInfo,
+          terms: parsedState.projectInfo.terms || [
+            "1. Estimates are valid for 30 days from date of issue.",
+            "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+            "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+          ]
+        };
+
+        setProjectInfo(loadedProjectInfo);
         setCategories(loadedCategories);
         setHasUnsavedChanges(true);
         setCurrentView('budget');
@@ -1755,19 +1793,53 @@ export default function App() {
         </div>
 
         {/* ===== FOOTER / TERMS & CONDITIONS ===== */}
-        {/* Document footer with standard terms and generation timestamp */}
-        <div className="mt-12 border-t border-gray-200 pt-8 text-gray-500 text-sm">
+        {/* Document footer with editable terms and generation timestamp */}
+        <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 text-gray-500 dark:text-gray-400 text-sm print:border-gray-300">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <h4 className="font-bold uppercase tracking-wider mb-2 text-xs">Terms & Conditions</h4>
-              <p className="mb-2">1. Estimates are valid for 30 days from date of issue.</p>
-              <p className="mb-2">2. Freight and delivery charges are estimated and will be billed at actual cost.</p>
-              <p>3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only.</p>
+              <h4 className="font-bold uppercase tracking-wider mb-3 text-xs text-gray-700 dark:text-gray-300 print:text-gray-900">Terms & Conditions</h4>
+              <div className="space-y-2">
+                {projectInfo.terms.map((term, index) => (
+                  <div key={index} className="flex gap-2">
+                    <AutoResizeTextarea
+                      value={term}
+                      onChange={(e) => {
+                        const newTerms = [...projectInfo.terms];
+                        newTerms[index] = e.target.value;
+                        handleProjectUpdate('terms', newTerms);
+                      }}
+                      className="flex-1 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0.5 -ml-1 text-gray-600 dark:text-gray-400 print:text-black"
+                      placeholder={`Term ${index + 1}`}
+                      style={{ outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => {
+                        const newTerms = projectInfo.terms.filter((_, i) => i !== index);
+                        handleProjectUpdate('terms', newTerms);
+                      }}
+                      className="text-red-500 hover:text-red-700 p-1 opacity-0 hover:opacity-100 focus:opacity-100 transition print:hidden"
+                      title="Remove term"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const newTerms = [...projectInfo.terms, `${projectInfo.terms.length + 1}. `];
+                  handleProjectUpdate('terms', newTerms);
+                }}
+                className="mt-3 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 print:hidden"
+              >
+                <Plus size={14} />
+                Add Term
+              </button>
             </div>
             <div className="flex flex-col justify-end items-end">
               <div className="text-right">
-                <p className="italic">© 2025-Generated via Pat Ryan Things LLC BudgetBuilder</p>
-                <p className="font-bold text-gray-900 mt-1">{new Date().toLocaleDateString()}</p>
+                <p className="italic text-gray-500 dark:text-gray-400 print:text-gray-600">© 2025-Generated via Pat Ryan Things LLC BudgetBuilder</p>
+                <p className="font-bold text-gray-900 dark:text-white print:text-black mt-1">{new Date().toLocaleDateString()}</p>
               </div>
             </div>
           </div>
