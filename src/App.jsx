@@ -22,7 +22,9 @@ import {
   Image,
   Paperclip,
   ExternalLink,
-  Book
+  Book,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import SpecBookView from './SpecBookView';
 
@@ -306,6 +308,76 @@ const SpecEditorModal = ({ isOpen, onClose, item, categoryId, onSave }) => {
 };
 
 // ============================================================================
+// STATUS MANAGEMENT COMPONENTS
+// ============================================================================
+
+const STATUS_CONFIG = {
+  'Draft': { color: 'bg-gray-300 border-gray-400', label: 'Draft' },
+  'Approved': { color: 'bg-blue-500 border-blue-600', label: 'Approved' },
+  'In Progress': { color: 'bg-amber-400 border-amber-500', label: 'In Progress' },
+  'Received': { color: 'bg-purple-500 border-purple-600', label: 'Received' },
+  'Installed': { color: 'bg-emerald-500 border-emerald-600', label: 'Installed' }
+};
+
+const StatusLegend = () => (
+  <div className="flex flex-wrap gap-6 justify-end mb-8 px-2 print:mb-4">
+    {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+      <div key={key} className="flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${config.color} shadow-sm ring-1 ring-white dark:ring-gray-800`}></div>
+        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{config.label}</span>
+      </div>
+    ))}
+  </div>
+);
+
+const StatusSelector = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const currentConfig = STATUS_CONFIG[value] || STATUS_CONFIG['Draft'];
+
+  return (
+    <div className="relative flex justify-center" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+        title={`Current Status: ${currentConfig.label}`}
+      >
+        <div className={`w-4 h-4 rounded-full ${currentConfig.color} shadow-sm ring-1 ring-white dark:ring-gray-800`}></div>
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+          {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+            <button
+              key={key}
+              onClick={() => {
+                onChange(key);
+                setIsOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${value === key ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+            >
+              <div className={`w-3 h-3 rounded-full ${config.color}`}></div>
+              <span className={`text-gray-700 dark:text-gray-200 ${value === key ? 'font-semibold' : ''}`}>{config.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
 // MAIN APPLICATION COMPONENT
 // ============================================================================
 
@@ -377,7 +449,7 @@ export default function App() {
    * - qty: Quantity ordered
    * - unitPrice: Price per unit in USD
    * - leadTime: Expected delivery or production time
-   * - status: Item status (Draft, Approved, Ordered, Received)
+   * - status: Item status (Draft, Approved, In Progress, Received)
    * - notes: Additional information (finish, color, special instructions)
    */
   const [categories, setCategories] = useState([
@@ -387,52 +459,7 @@ export default function App() {
       icon: Armchair,
       color: 'text-blue-600',
       items: [
-        { id: 1, mfr: 'Industry West', desc: 'Dining Chairs - Main Hall', dimensions: '22"W x 24"D', qty: 50, unitPrice: 170, leadTime: '8 Weeks', status: 'Ordered', notes: 'Walnut Finish' },
-        { id: 2, mfr: 'Grand Rapids', desc: 'Bar Stools - Central Bar', dimensions: '18" Round', qty: 46, unitPrice: 225, leadTime: '10 Weeks', status: 'Approved', notes: 'Leather Seat' },
-        { id: 3, mfr: 'Custom', desc: 'Community Tables', dimensions: '120"L x 40"W', qty: 4, unitPrice: 2500, leadTime: '12 Weeks', status: 'Draft', notes: 'Reclaimed Oak' },
-      ]
-    },
-    {
-      id: 'custom',
-      title: 'Custom Fixtures, Millwork & Lighting',
-      icon: Lightbulb,
-      color: 'text-amber-600',
-      items: [
-        { id: 4, mfr: 'Fabricator A', desc: 'Motor Row Parts Sculpture', dimensions: 'Variable', qty: 1, unitPrice: 18000, leadTime: '16 Weeks', notes: 'Suspended Ceiling Mount' },
-        { id: 5, mfr: 'MetalWorks', desc: 'Decorative Railing w/ Finish', dimensions: '140 LF', qty: 1, unitPrice: 22000, leadTime: '12 Weeks', notes: 'Perforated Infill' },
-        { id: 6, mfr: 'LuxeLight', desc: 'Oversized Dome Pendants', dimensions: '48" Dia', qty: 6, unitPrice: 1200, leadTime: '14 Weeks', notes: 'Brass Interior' },
-      ]
-    },
-    {
-      id: 'wayfinding',
-      title: 'Wayfinding & Environmental Graphics',
-      icon: Signpost,
-      color: 'text-purple-600',
-      items: [
-        { id: 7, mfr: 'SignPro', desc: 'Vendor Stall Headers', dimensions: '48" x 12"', qty: 12, unitPrice: 450, leadTime: '4 Weeks', status: 'Draft', notes: 'Illuminated', specs: { detailedDescription: '', attachments: [] } },
-        { id: 8, mfr: 'SignPro', desc: 'Restroom Directional', dimensions: '12" x 12"', qty: 4, unitPrice: 125, leadTime: '2 Weeks', status: 'Draft', notes: 'Vinyl on Acrylic', specs: { detailedDescription: '', attachments: [] } },
-      ]
-    },
-    {
-      id: 'exterior',
-      title: 'Exterior Patio & Accessories',
-      icon: TreePine,
-      color: 'text-emerald-600',
-      items: [
-        { id: 9, mfr: 'Fermob', desc: 'Bistro Tables', dimensions: '24" Round', qty: 15, unitPrice: 340, leadTime: 'In Stock', status: 'Draft', notes: 'Poppy Red', specs: { detailedDescription: '', attachments: [] } },
-        { id: 10, mfr: 'Fermob', desc: 'Folding Chairs', dimensions: 'Standard', qty: 30, unitPrice: 120, leadTime: 'In Stock', status: 'Draft', notes: 'Metal', specs: { detailedDescription: '', attachments: [] } },
-        { id: 11, mfr: 'PlanterCo', desc: 'Dividing Planters', dimensions: '48"L x 18"W', qty: 8, unitPrice: 650, leadTime: '3 Weeks', status: 'Draft', notes: 'Cortens Steel', specs: { detailedDescription: '', attachments: [] } },
-      ]
-    },
-    {
-      id: 'fees',
-      title: 'Project Fees & Jobsite Logistics',
-      icon: Briefcase,
-      color: 'text-gray-600',
-      items: [
-        { id: 12, mfr: 'Internal', desc: 'Project Management Fee', dimensions: 'N/A', qty: 200, unitPrice: 85, leadTime: 'Ongoing', status: 'Draft', notes: 'Est Hours', specs: { detailedDescription: '', attachments: [] } },
-        { id: 13, mfr: 'Logistics Co', desc: 'Receiving & Assembly', dimensions: 'N/A', qty: 1, unitPrice: 13000, leadTime: 'N/A', status: 'Draft', notes: 'White glove', specs: { detailedDescription: '', attachments: [] } },
-        { id: 14, mfr: 'Travel', desc: 'Site Visits / Travel', dimensions: 'N/A', qty: 1, unitPrice: 6000, leadTime: 'N/A', status: 'Draft', notes: 'Flight + Hotel', specs: { detailedDescription: '', attachments: [] } },
+        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
       ]
     }
   ]);
@@ -507,6 +534,26 @@ export default function App() {
     }
     return false;
   });
+
+  /**
+   * Column Visibility State
+   * Controls which columns are displayed in the main budget spreadsheet.
+   */
+  const [visibleColumns, setVisibleColumns] = useState({
+    mfr: true,
+    dimensions: true,
+    leadTime: true,
+    status: true,
+    qty: true,
+    unitPrice: true,
+    total: true,
+    notes: true
+  });
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+
+  const toggleColumn = (col) => {
+    setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
+  };
 
   // ============================================================================
   // EFFECT HOOKS
@@ -1208,6 +1255,21 @@ export default function App() {
     }
   };
 
+  /**
+   * Handle Logo Upload
+   * Reads the uploaded image file and updates the project logo.
+   */
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        handleProjectUpdate('logoUrl', event.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -1388,6 +1450,57 @@ export default function App() {
               <Save size={16} /> Save As
             </button>
             <div className="w-px h-8 bg-gray-600 mx-1"></div>
+            {/* View Options Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnMenu(!showColumnMenu)}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
+                title="View Options"
+              >
+                <Settings size={16} /> View Options
+              </button>
+              
+              {showColumnMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowColumnMenu(false)}
+                  ></div>
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                    <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                      <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1">
+                        Visible Columns
+                      </div>
+                    </div>
+                    <div className="p-1">
+                      {[
+                        { id: 'mfr', label: 'Manufacturer' },
+                        { id: 'dimensions', label: 'Dimensions' },
+                        { id: 'leadTime', label: 'Lead Time' },
+                        { id: 'status', label: 'Status' },
+                        { id: 'qty', label: 'Quantity' },
+                        { id: 'unitPrice', label: 'Unit Price' },
+                        { id: 'total', label: 'Total' },
+                        { id: 'notes', label: 'Notes' }
+                      ].map(col => (
+                        <button
+                          key={col.id}
+                          onClick={() => toggleColumn(col.id)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        >
+                          <span>{col.label}</span>
+                          {visibleColumns[col.id] ? (
+                            <Eye size={14} className="text-blue-600 dark:text-blue-400" />
+                          ) : (
+                            <EyeOff size={14} className="text-gray-400" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setCurrentView('specbook')}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 transition px-4 py-2 rounded-md text-sm font-semibold"
@@ -1533,11 +1646,23 @@ export default function App() {
           <div className="flex items-start justify-between p-8 pb-6 border-b border-gray-100 dark:border-gray-700 print:border-gray-200">
             <div className="flex gap-6 items-start">
               {/* Logo */}
-              <div className="flex-shrink-0">
-                <img
-                  src={projectInfo.logoUrl}
-                  alt={`${projectInfo.companyName} Logo`}
-                  className="w-20 h-20 object-contain rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2"
+              <div className="flex-shrink-0 relative group">
+                <label htmlFor="logo-upload" className="cursor-pointer block relative">
+                  <img
+                    src={projectInfo.logoUrl}
+                    alt={`${projectInfo.companyName} Logo`}
+                    className="w-20 h-20 object-contain rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2 group-hover:border-blue-500 transition-colors"
+                  />
+                  <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
+                    <span className="text-white text-xs font-bold">Change</span>
+                  </div>
+                </label>
+                <input
+                  id="logo-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
                 />
               </div>
 
@@ -1646,7 +1771,7 @@ export default function App() {
 
         {/* ===== DASHBOARD SUMMARY ===== */}
         {/* Four-card dashboard showing key budget metrics at a glance */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 print:grid-cols-4 gap-4 mb-8">
           {/* Budget Allowance Card - Editable total budget */}
           <Card className="p-5 border-l-4 border-blue-500">
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Budget Allowance</div>
@@ -1705,6 +1830,9 @@ export default function App() {
           </Card>
         </div>
 
+        {/* Status Legend */}
+        <StatusLegend />
+
         {/* ===== BUDGET CATEGORIES ===== */}
         {/* Iterates through all categories to display line item tables */}
         <div className="flex flex-col pb-4">
@@ -1723,7 +1851,7 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="break-inside-avoid group">
+              <div className="break-inside-avoid group print:mb-8">
               <Card className="overflow-hidden">
                 <SectionHeader
                   icon={category.icon}
@@ -1741,15 +1869,15 @@ export default function App() {
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase">
                         <th style={{ padding: '12px 16px', width: '40px', textAlign: 'left' }}>#</th>
-                        <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Manufacturer</th>
+                        {visibleColumns.status && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'center' }}>Status</th>}
+                        {visibleColumns.mfr && <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Manufacturer</th>}
                         <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
-                        <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>
-                        <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>
-                        <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Status</th>
-                        <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>
-                        <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>
-                        <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>
-                        <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>
+                        {visibleColumns.dimensions && <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>}
+                        {visibleColumns.qty && <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>}
+                        {visibleColumns.unitPrice && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>}
+                        {visibleColumns.total && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>}
+                        {visibleColumns.leadTime && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>}
+                        {visibleColumns.notes && <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>}
                         <th style={{ padding: '12px 16px', width: '90px', textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
@@ -1777,7 +1905,17 @@ export default function App() {
                           <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
                           {/* Row number (1-indexed for user readability) */}
                           <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
+                          {/* Status field */}
+                          {visibleColumns.status && (
+                          <td className="px-4 py-2">
+                            <StatusSelector
+                              value={item.status || 'Draft'}
+                              onChange={(val) => updateItem(category.id, item.id, 'status', val)}
+                            />
+                          </td>
+                          )}
                           {/* Manufacturer/Vendor field */}
+                          {visibleColumns.mfr && (
                           <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
                             <AutoResizeTextarea
                               style={{
@@ -1797,6 +1935,7 @@ export default function App() {
                               placeholder="Mfr Name"
                             />
                           </td>
+                          )}
                           {/* Item description field */}
                           <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
                             <AutoResizeTextarea
@@ -1817,6 +1956,7 @@ export default function App() {
                             />
                           </td>
                           {/* Dimensions field */}
+                          {visibleColumns.dimensions && (
                           <td className="px-4 py-2 align-top">
                             <AutoResizeTextarea
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
@@ -1825,30 +1965,9 @@ export default function App() {
                               placeholder='Dimensions'
                             />
                           </td>
-                          {/* Lead time field */}
-                          <td className="px-4 py-2 align-top">
-                            <AutoResizeTextarea
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
-                              value={item.leadTime}
-                              onChange={(e) => updateItem(category.id, item.id, 'leadTime', e.target.value)}
-                              placeholder='L/T'
-                            />
-                          </td>
-                          {/* Status field */}
-                          <td className="px-4 py-2">
-                            <select
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300"
-                              value={item.status || 'Draft'}
-                              onChange={(e) => updateItem(category.id, item.id, 'status', e.target.value)}
-                            >
-                              <option value="Draft">Draft</option>
-                              <option value="Approved">Approved</option>
-                              <option value="Ordered">Ordered</option>
-                              <option value="Received">Received</option>
-                              <option value="Installed">Installed</option>
-                            </select>
-                          </td>
+                          )}
                           {/* Quantity field - highlighted with blue background */}
+                          {visibleColumns.qty && (
                           <td className="px-4 py-2">
                             <input
                               type="number"
@@ -1857,7 +1976,9 @@ export default function App() {
                               onChange={(e) => updateItem(category.id, item.id, 'qty', parseFloat(e.target.value) || 0)}
                             />
                           </td>
+                          )}
                           {/* Unit price field with dollar sign prefix */}
+                          {visibleColumns.unitPrice && (
                           <td className="px-4 py-2">
                             <div className="relative">
                               <span className="absolute left-1 top-1 text-gray-400 text-xs">$</span>
@@ -1869,15 +1990,30 @@ export default function App() {
                               />
                             </div>
                           </td>
+                          )}
                           {/* Calculated total for this line (qty × unit price) */}
+                          {visibleColumns.total && (
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white bg-gray-50/50 dark:bg-gray-700/30">
                             {formatCurrency(item.qty * item.unitPrice)}
                           </td>
-                          {/* Notes field - for finish, color, or special instructions */}
+                          )}
+                          {/* Lead time field */}
+                          {visibleColumns.leadTime && (
                           <td className="px-4 py-2 align-top">
-                            <div className="space-y-2">
+                            <AutoResizeTextarea
+                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
+                              value={item.leadTime}
+                              onChange={(e) => updateItem(category.id, item.id, 'leadTime', e.target.value)}
+                              placeholder='L/T'
+                            />
+                          </td>
+                          )}
+                          {/* Notes field - for finish, color, or special instructions */}
+                          {visibleColumns.notes && (
+                          <td className="px-4 py-2 align-middle">
+                            <div className="flex flex-col items-center justify-center space-y-2">
                               <AutoResizeTextarea
-                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 dark:text-gray-400 italic placeholder-gray-300"
+                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-900 dark:text-gray-100 text-center placeholder-gray-300"
                                 value={item.notes}
                                 onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
                                 placeholder="Finish / Note"
@@ -1898,8 +2034,14 @@ export default function App() {
                                   </span>
                                 )}
                               </button>
+                              {(item.specs?.detailedDescription || item.specs?.attachments?.length > 0) && (
+                                <div className="hidden print:block text-xs text-gray-900 font-bold mt-1">
+                                  (See Spec Book)
+                                </div>
+                              )}
                             </div>
                           </td>
+                          )}
                           {/* Delete button - subtle trash icon, hidden when printing */}
                           <td style={{
                             padding: '8px',

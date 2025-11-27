@@ -8,8 +8,14 @@ import {
   FileText,
   Image as ImageIcon,
   Edit,
-  Layers
+  Layers,
+  Paperclip,
+  Download,
+  Eye,
+  EyeOff,
+  Settings
 } from 'lucide-react';
+import { useState } from 'react';
 
 /**
  * SpecBookView Component
@@ -17,9 +23,36 @@ import {
  * Designed for printing with one item per page.
  */
 const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
+  const [visibleColumns, setVisibleColumns] = useState({
+    mfr: true,
+    dimensions: true,
+    qty: true,
+    unitPrice: true,
+    leadTime: true,
+    status: false,
+    notes: true
+  });
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const toggleColumn = (col) => {
+    setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
+  };
+
+  /**
+   * Triggers a download of the attachment file.
+   * This allows the user to open it with their system default application.
+   */
+  const openAttachment = (att) => {
+    const link = document.createElement('a');
+    link.href = att.dataUrl;
+    link.download = att.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Flatten all items to a single list for easier iteration if needed, 
@@ -48,6 +81,39 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnMenu(!showColumnMenu)}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
+              >
+                <Settings size={16} /> View Options
+              </button>
+              
+              {showColumnMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 z-50 text-gray-800 dark:text-gray-100">
+                  <div className="text-xs font-bold text-gray-500 uppercase px-2 py-1 mb-1">Toggle Columns</div>
+                  {[
+                    { key: 'mfr', label: 'Manufacturer' },
+                    { key: 'dimensions', label: 'Dimensions' },
+                    { key: 'qty', label: 'Quantity' },
+                    { key: 'unitPrice', label: 'Unit Price' },
+                    { key: 'leadTime', label: 'Lead Time' },
+                    { key: 'status', label: 'Status' },
+                    { key: 'notes', label: 'Finish / Notes' }
+                  ].map(col => (
+                    <button
+                      key={col.key}
+                      onClick={() => toggleColumn(col.key)}
+                      className="flex items-center justify-between w-full px-2 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <span>{col.label}</span>
+                      {visibleColumns[col.key] ? <Eye size={14} className="text-blue-600" /> : <EyeOff size={14} className="text-gray-400" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition px-4 py-2 rounded-md text-sm font-semibold shadow-sm"
@@ -132,6 +198,9 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                 {category.items.map((item, index) => {
                   // Find primary image (first image attachment)
                   const primaryImage = item.specs?.attachments?.find(att => att.type.startsWith('image/'));
+                  // Find document attachments (PDFs, etc.)
+                  const documents = item.specs?.attachments?.filter(att => !att.type.startsWith('image/')) || [];
+                  
                   const refId = `${category.id.substring(0, 3).toUpperCase()}-${String(index + 1).padStart(3, '0')}`;
                   
                   // CONDENSED LAYOUT (No Image)
@@ -160,31 +229,75 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4 bg-gray-50 p-4 rounded-md border border-gray-100">
-                          <div>
-                            <span className="block text-xs font-semibold text-gray-500 uppercase">Dimensions</span>
-                            <span className="font-medium text-gray-900">{item.dimensions || '-'}</span>
-                          </div>
-                          <div>
-                            <span className="block text-xs font-semibold text-gray-500 uppercase">Quantity</span>
-                            <span className="font-medium text-gray-900">{item.qty}</span>
-                          </div>
-                          <div>
-                            <span className="block text-xs font-semibold text-gray-500 uppercase">Unit Price</span>
-                            <span className="font-medium text-gray-900">${item.unitPrice?.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            <span className="block text-xs font-semibold text-gray-500 uppercase">Lead Time</span>
-                            <span className="font-medium text-gray-900">{item.leadTime || '-'}</span>
-                          </div>
+                          {visibleColumns.mfr && (
+                            <div>
+                              <span className="block text-xs font-semibold text-gray-500 uppercase">Manufacturer</span>
+                              <span className="font-medium text-gray-900">{item.mfr || 'TBD'}</span>
+                            </div>
+                          )}
+                          {visibleColumns.dimensions && (
+                            <div>
+                              <span className="block text-xs font-semibold text-gray-500 uppercase">Dimensions</span>
+                              <span className="font-medium text-gray-900">{item.dimensions || '-'}</span>
+                            </div>
+                          )}
+                          {visibleColumns.qty && (
+                            <div>
+                              <span className="block text-xs font-semibold text-gray-500 uppercase">Quantity</span>
+                              <span className="font-medium text-gray-900">{item.qty}</span>
+                            </div>
+                          )}
+                          {visibleColumns.unitPrice && (
+                            <div>
+                              <span className="block text-xs font-semibold text-gray-500 uppercase">Unit Price</span>
+                              <span className="font-medium text-gray-900">${item.unitPrice?.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {visibleColumns.leadTime && (
+                            <div>
+                              <span className="block text-xs font-semibold text-gray-500 uppercase">Lead Time</span>
+                              <span className="font-medium text-gray-900">{item.leadTime || '-'}</span>
+                            </div>
+                          )}
+                          {visibleColumns.status && (
+                            <div>
+                              <span className="block text-xs font-semibold text-gray-500 uppercase">Status</span>
+                              <span className="font-medium text-gray-900">{item.status || '-'}</span>
+                            </div>
+                          )}
                         </div>
 
-                        {(item.notes || item.specs?.detailedDescription) && (
+                        {(visibleColumns.notes && (item.notes || item.specs?.detailedDescription || documents.length > 0)) && (
                           <div className="text-sm text-gray-700 border-t border-gray-100 pt-3 mt-3">
                             {item.notes && (
                               <p className="mb-2"><span className="font-semibold text-gray-900">Notes:</span> {item.notes}</p>
                             )}
                             {item.specs?.detailedDescription && (
-                              <p className="whitespace-pre-wrap text-gray-600">{item.specs.detailedDescription}</p>
+                              <p className="whitespace-pre-wrap text-gray-600 mb-3">{item.specs.detailedDescription}</p>
+                            )}
+                            
+                            {/* Attached Documents List */}
+                            {documents.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-gray-100 border-dashed">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                  <Paperclip size={12} /> Attached Documents
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {documents.map((doc, i) => (
+                                    <button
+                                      key={i}
+                                      onClick={() => openAttachment(doc)}
+                                      className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors group/doc text-left w-full"
+                                      title={`Open ${doc.name}`}
+                                    >
+                                      <FileText size={14} className="text-red-500 flex-shrink-0" />
+                                      <span className="truncate font-medium text-gray-700 group-hover/doc:text-blue-700">{doc.name}</span>
+                                      <span className="text-gray-400 text-xs ml-auto whitespace-nowrap">{(doc.size / 1024).toFixed(0)} KB</span>
+                                      <Download size={12} className="text-gray-400 opacity-0 group-hover/doc:opacity-100 transition-opacity" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}
@@ -196,13 +309,22 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                   return (
                     <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm print:shadow-none break-inside-avoid flex flex-col md:flex-row relative group">
                       {/* Edit Button */}
-                      <button 
-                        onClick={() => onEditItem(item, category.id)}
-                        className="absolute top-4 right-4 z-10 bg-white/90 hover:bg-blue-50 text-blue-600 p-2 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden"
-                        title="Edit Specifications"
-                      >
-                        <Edit size={16} />
-                      </button>
+                      <div className="absolute top-4 right-4 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
+                        <button 
+                          onClick={() => openAttachment(primaryImage)}
+                          className="bg-white/90 hover:bg-blue-50 text-blue-600 p-2 rounded-full shadow-sm"
+                          title="Open/Download Image"
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button 
+                          onClick={() => onEditItem(item, category.id)}
+                          className="bg-white/90 hover:bg-blue-50 text-blue-600 p-2 rounded-full shadow-sm"
+                          title="Edit Specifications"
+                        >
+                          <Edit size={16} />
+                        </button>
+                      </div>
 
                       {/* Image Section - Fixed width on desktop/print */}
                       <div className="w-full md:w-1/3 print:w-1/3 bg-gray-100 border-b md:border-b-0 md:border-r border-gray-200 p-4 flex flex-col items-center justify-center">
@@ -213,13 +335,18 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                         {item.specs?.attachments?.length > 1 && (
                           <div className="flex gap-2 mt-2 overflow-x-auto w-full py-1">
                             {item.specs.attachments.filter(a => a !== primaryImage).slice(0, 3).map((att, i) => (
-                              <div key={i} className="w-12 h-12 flex-shrink-0 border border-gray-200 bg-white rounded flex items-center justify-center overflow-hidden">
+                              <button 
+                                key={i} 
+                                onClick={() => openAttachment(att)}
+                                className="w-12 h-12 flex-shrink-0 border border-gray-200 bg-white rounded flex items-center justify-center overflow-hidden hover:border-blue-500 transition-colors"
+                                title={att.name}
+                              >
                                 {att.type.startsWith('image/') ? (
                                   <img src={att.dataUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                   <FileText size={12} className="text-gray-400" />
                                 )}
-                              </div>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -235,38 +362,80 @@ const SpecBookView = ({ projectInfo, categories, onBack, onEditItem }) => {
                               </span>
                               <h3 className="text-xl font-bold text-gray-900">{item.desc}</h3>
                             </div>
-                            <p className="text-sm text-gray-500 font-medium">{item.mfr || 'Manufacturer TBD'}</p>
+                            <p className="text-sm text-gray-500 font-medium">
+                              {visibleColumns.mfr ? (item.mfr || 'Manufacturer TBD') : ''}
+                            </p>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mb-6">
-                          <div className="flex justify-between border-b border-gray-100 py-1">
-                            <span className="text-gray-500">Dimensions</span>
-                            <span className="font-medium text-gray-900 text-right">{item.dimensions || '-'}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-gray-100 py-1">
-                            <span className="text-gray-500">Quantity</span>
-                            <span className="font-medium text-gray-900 text-right">{item.qty}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-gray-100 py-1">
-                            <span className="text-gray-500">Unit Price</span>
-                            <span className="font-medium text-gray-900 text-right">${item.unitPrice?.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-gray-100 py-1">
-                            <span className="text-gray-500">Lead Time</span>
-                            <span className="font-medium text-gray-900 text-right">{item.leadTime || '-'}</span>
-                          </div>
-                          <div className="col-span-2 flex justify-between border-b border-gray-100 py-1">
-                            <span className="text-gray-500">Finish / Notes</span>
-                            <span className="font-medium text-gray-900 text-right">{item.notes || '-'}</span>
-                          </div>
+                          {visibleColumns.dimensions && (
+                            <div className="flex justify-between border-b border-gray-100 py-1">
+                              <span className="text-gray-500">Dimensions</span>
+                              <span className="font-medium text-gray-900 text-right">{item.dimensions || '-'}</span>
+                            </div>
+                          )}
+                          {visibleColumns.qty && (
+                            <div className="flex justify-between border-b border-gray-100 py-1">
+                              <span className="text-gray-500">Quantity</span>
+                              <span className="font-medium text-gray-900 text-right">{item.qty}</span>
+                            </div>
+                          )}
+                          {visibleColumns.unitPrice && (
+                            <div className="flex justify-between border-b border-gray-100 py-1">
+                              <span className="text-gray-500">Unit Price</span>
+                              <span className="font-medium text-gray-900 text-right">${item.unitPrice?.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {visibleColumns.leadTime && (
+                            <div className="flex justify-between border-b border-gray-100 py-1">
+                              <span className="text-gray-500">Lead Time</span>
+                              <span className="font-medium text-gray-900 text-right">{item.leadTime || '-'}</span>
+                            </div>
+                          )}
+                          {visibleColumns.status && (
+                            <div className="flex justify-between border-b border-gray-100 py-1">
+                              <span className="text-gray-500">Status</span>
+                              <span className="font-medium text-gray-900 text-right">{item.status || '-'}</span>
+                            </div>
+                          )}
+                          {visibleColumns.notes && (
+                            <div className="col-span-2 flex justify-between border-b border-gray-100 py-1">
+                              <span className="text-gray-500">Finish / Notes</span>
+                              <span className="font-medium text-gray-900 text-right">{item.notes || '-'}</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-auto">
                           <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Specifications</h4>
-                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-6 mb-3">
                             {item.specs?.detailedDescription || 'No detailed specifications provided.'}
                           </div>
+
+                          {/* Attached Documents List */}
+                          {documents.length > 0 && (
+                            <div className="pt-3 border-t border-gray-100 border-dashed">
+                              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <Paperclip size={12} /> Attached Documents
+                              </h4>
+                              <div className="space-y-1">
+                                {documents.map((doc, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => openAttachment(doc)}
+                                    className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 p-1 rounded -ml-1 transition-colors w-full text-left group/doc"
+                                    title={`Open ${doc.name}`}
+                                  >
+                                    <FileText size={14} className="text-red-500 flex-shrink-0" />
+                                    <span className="truncate font-medium">{doc.name}</span>
+                                    <span className="text-gray-400 text-xs ml-auto whitespace-nowrap">{(doc.size / 1024).toFixed(0)} KB</span>
+                                    <Download size={12} className="text-gray-400 opacity-0 group-hover/doc:opacity-100 transition-opacity ml-2" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
