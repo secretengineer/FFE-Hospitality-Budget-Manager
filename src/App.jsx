@@ -24,7 +24,8 @@ import {
   ExternalLink,
   Book,
   Eye,
-  EyeOff
+  EyeOff,
+  Menu
 } from 'lucide-react';
 import SpecBookView from './SpecBookView';
 
@@ -459,7 +460,7 @@ export default function App() {
       icon: Armchair,
       color: 'text-blue-600',
       items: [
-        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
+        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', isTaxable: false, notes: '', specs: { detailedDescription: '', attachments: [] } }
       ]
     }
   ]);
@@ -499,6 +500,12 @@ export default function App() {
   const [draftInfo, setDraftInfo] = useState(null);
 
   /**
+   * Last Auto-Save Time State
+   * Tracks when the last auto-save occurred to display to the user.
+   */
+  const [lastAutoSave, setLastAutoSave] = useState(null);
+
+  /**
    * Print Settings State
    * Controls the layout and formatting of the printed document.
    */
@@ -536,6 +543,12 @@ export default function App() {
   });
 
   /**
+   * Main Menu State
+   * Controls the visibility of the main application dropdown menu.
+   */
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  /**
    * Column Visibility State
    * Controls which columns are displayed in the main budget spreadsheet.
    */
@@ -547,6 +560,7 @@ export default function App() {
     qty: true,
     unitPrice: true,
     total: true,
+    tax: true,
     notes: true
   });
   const [showColumnMenu, setShowColumnMenu] = useState(false);
@@ -564,7 +578,13 @@ export default function App() {
    * Marks document as having unsaved changes whenever state updates.
    * Ignores initial render by checking if this is the first update.
    */
+  const isFirstRender = React.useRef(true);
+
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setHasUnsavedChanges(true);
   }, [projectInfo, categories]);
 
@@ -587,6 +607,7 @@ export default function App() {
         }))
       };
       localStorage.setItem('ffe_autosave', JSON.stringify(stateToSave));
+      setLastAutoSave(new Date().toLocaleString()); // Update last auto-save time
     }, 1000);
 
     return () => clearTimeout(timeoutId);
@@ -684,18 +705,35 @@ export default function App() {
   const totals = useMemo(() => {
     let grandTotal = 0;
     const categoryTotals = {};
+    let taxableTotal = 0;
+
+    if (!categories || !Array.isArray(categories)) {
+      return { categoryTotals, grandTotal, tax: 0, totalWithTax: 0, variance: 0 };
+    }
 
     // Calculate subtotal for each category
     categories.forEach(cat => {
-      const catSum = cat.items.reduce((sum, item) => sum + (item.qty * item.unitPrice), 0);
+      if (!cat.items || !Array.isArray(cat.items)) {
+        categoryTotals[cat.id] = 0;
+        return;
+      }
+
+      const catSum = cat.items.reduce((sum, item) => {
+        const itemTotal = (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
+        if (item.isTaxable !== false) { // Default to true if undefined
+          taxableTotal += itemTotal;
+        }
+        return sum + itemTotal;
+      }, 0);
       categoryTotals[cat.id] = catSum;
       grandTotal += catSum;
     });
 
     // Calculate tax and final totals
-    const tax = grandTotal * (projectInfo.salesTaxRate / 100);
+    const rate = Number(projectInfo.salesTaxRate) || 0;
+    const tax = taxableTotal * (rate / 100);
     const totalWithTax = grandTotal + tax;
-    const variance = projectInfo.allowance - totalWithTax;
+    const variance = (Number(projectInfo.allowance) || 0) - totalWithTax;
 
     return { categoryTotals, grandTotal, tax, totalWithTax, variance };
   }, [categories, projectInfo.allowance, projectInfo.salesTaxRate]);
@@ -739,7 +777,7 @@ export default function App() {
           icon: Armchair,
           color: 'text-blue-600',
           items: [
-            { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
+            { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', isTaxable: false, notes: '', specs: { detailedDescription: '', attachments: [] } }
           ]
         }
       ]);
@@ -750,7 +788,7 @@ export default function App() {
       setConfirmationModal(prev => ({ ...prev, isOpen: false }));
     };
 
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && currentView !== 'welcome') {
       setConfirmationModal({
         isOpen: true,
         title: 'Create New Document',
@@ -918,6 +956,7 @@ export default function App() {
               // Ensure numeric values are numbers
               qty: Number(item.qty) || 0,
               unitPrice: Number(item.unitPrice) || 0,
+              isTaxable: item.isTaxable !== false, // Default to true
               // Add specs field for backward compatibility with old files
               specs: item.specs || { detailedDescription: '', attachments: [] }
             }))
@@ -950,7 +989,7 @@ export default function App() {
       }
     };
 
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && currentView !== 'welcome') {
       setConfirmationModal({
         isOpen: true,
         title: 'Open Document',
@@ -1040,6 +1079,7 @@ export default function App() {
       unitPrice: 0,
       leadTime: '',
       status: 'Draft',
+      isTaxable: false,
       notes: '',
       specs: { detailedDescription: '', attachments: [] }
     };
@@ -1139,7 +1179,7 @@ export default function App() {
       icon: Layout,
       color: 'text-gray-600',
       items: [
-        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
+        { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', isTaxable: false, notes: '', specs: { detailedDescription: '', attachments: [] } }
       ]
     };
     
@@ -1230,6 +1270,7 @@ export default function App() {
           // Add specs for backward compatibility
           items: cat.items.map(item => ({
             ...item,
+            isTaxable: item.isTaxable !== false,
             specs: item.specs || { detailedDescription: '', attachments: [] }
           }))
         }));
@@ -1302,6 +1343,13 @@ export default function App() {
   if (currentView === 'welcome') {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 font-sans transition-colors duration-200">
+        <ConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          title={confirmationModal.title}
+          message={confirmationModal.message}
+          onConfirm={confirmationModal.onConfirm}
+          onCancel={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
+        />
         <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
 
           {/* Welcome Info */}
@@ -1409,119 +1457,113 @@ export default function App() {
 
       {/* ===== TOP NAVIGATION BAR ===== */}
       {/* Hidden when printing, provides app branding and file/print functionality */}
-      <div className="bg-slate-900 text-white shadow-lg print:hidden">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Layout className="text-blue-400" />
-            <h1 className="text-xl font-bold tracking-tight">
-              BudgetBuilder FF&E Manager 1.0
-              {hasUnsavedChanges && <span className="text-yellow-400 ml-2">*</span>}
-            </h1>
+      <div className="bg-slate-900 text-white shadow-lg print:hidden sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
+          
+          {/* Branding */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-900/50">
+               <Layout className="text-white h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight flex items-center gap-1">
+                BudgetBuilder<span className="text-blue-400">™</span>
+                {hasUnsavedChanges && <span className="text-amber-400 text-xs ml-1" title="Unsaved Changes">●</span>}
+              </h1>
+              <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Hospitality FF&E Manager</div>
+            </div>
           </div>
 
-          {/* File Management & Print Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleNewDocument}
-              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
-              title="New Document"
+          {/* Center - Auto Save Status */}
+           {lastAutoSave && (
+                <div className="hidden md:flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-full">
+                  <Save size={12} className="text-emerald-400" />
+                  <span>Auto-saved {lastAutoSave}</span>
+                </div>
+           )}
+
+          {/* Right - Menu */}
+          <div className="relative">
+            <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className={`p-2 rounded-lg transition-all duration-200 ${isMenuOpen ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 text-slate-300 hover:text-white'}`}
+                title="Menu"
             >
-              <FileText size={16} /> New
+                <Menu size={24} />
             </button>
-            <button
-              onClick={handleOpen}
-              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
-              title="Open Document"
-            >
-              <FolderOpen size={16} /> Open
-            </button>
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-2 bg-green-700 hover:bg-green-600 transition px-3 py-2 rounded-md text-sm font-semibold"
-              title="Save Document"
-            >
-              <Save size={16} /> Save
-            </button>
-            <button
-              onClick={handleSaveAs}
-              className="flex items-center gap-2 bg-green-700 hover:bg-green-600 transition px-3 py-2 rounded-md text-sm font-semibold"
-              title="Save As..."
-            >
-              <Save size={16} /> Save As
-            </button>
-            <div className="w-px h-8 bg-gray-600 mx-1"></div>
-            {/* View Options Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowColumnMenu(!showColumnMenu)}
-                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 transition px-3 py-2 rounded-md text-sm font-semibold"
-                title="View Options"
-              >
-                <Settings size={16} /> View Options
-              </button>
-              
-              {showColumnMenu && (
+
+            {isMenuOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setShowColumnMenu(false)}
-                  ></div>
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
-                    <div className="p-2 border-b border-gray-100 dark:border-gray-700">
-                      <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1">
-                        Visible Columns
-                      </div>
-                    </div>
-                    <div className="p-1">
-                      {[
-                        { id: 'mfr', label: 'Manufacturer' },
-                        { id: 'dimensions', label: 'Dimensions' },
-                        { id: 'leadTime', label: 'Lead Time' },
-                        { id: 'status', label: 'Status' },
-                        { id: 'qty', label: 'Quantity' },
-                        { id: 'unitPrice', label: 'Unit Price' },
-                        { id: 'total', label: 'Total' },
-                        { id: 'notes', label: 'Notes' }
-                      ].map(col => (
-                        <button
-                          key={col.id}
-                          onClick={() => toggleColumn(col.id)}
-                          className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        >
-                          <span>{col.label}</span>
-                          {visibleColumns[col.id] ? (
-                            <Eye size={14} className="text-blue-600 dark:text-blue-400" />
-                          ) : (
-                            <EyeOff size={14} className="text-gray-400" />
-                          )}
+                <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)}></div>
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                    
+                    {/* File Operations */}
+                    <div className="p-2">
+                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">File</div>
+                        <button onClick={() => { handleNewDocument(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <FileText size={16} className="text-blue-500" /> New Project
                         </button>
-                      ))}
+                        <button onClick={() => { handleOpen(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <FolderOpen size={16} className="text-amber-500" /> Open Existing
+                        </button>
+                        <button onClick={() => { handleSave(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <Save size={16} className="text-emerald-500" /> Save Project
+                        </button>
+                        <button onClick={() => { handleSaveAs(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <Copy size={16} className="text-emerald-500" /> Save As...
+                        </button>
                     </div>
-                  </div>
+
+                    <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
+
+                    {/* View & Tools */}
+                    <div className="p-2">
+                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">View & Tools</div>
+                        <button onClick={() => { setCurrentView('specbook'); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <Book size={16} className="text-indigo-500" /> Spec Book View
+                        </button>
+                        <button onClick={() => { handlePrint(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            <Printer size={16} className="text-gray-500" /> Print / Export PDF
+                        </button>
+                        <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                            {isDarkMode ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-indigo-400" />} 
+                            {isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                        </button>
+                    </div>
+
+                    <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
+
+                    {/* Column Visibility */}
+                    <div className="p-2 bg-gray-50 dark:bg-gray-800/50">
+                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">Visible Columns</div>
+                        <div className="grid grid-cols-2 gap-1">
+                            {[
+                                { id: 'mfr', label: 'Manufacturer' },
+                                { id: 'dimensions', label: 'Dimensions' },
+                                { id: 'leadTime', label: 'Lead Time' },
+                                { id: 'status', label: 'Status' },
+                                { id: 'qty', label: 'Quantity' },
+                                { id: 'unitPrice', label: 'Unit Price' },
+                                { id: 'total', label: 'Total' },
+                                { id: 'tax', label: 'Taxable' },
+                                { id: 'notes', label: 'Notes' }
+                            ].map(col => (
+                                <button
+                                    key={col.id}
+                                    onClick={() => toggleColumn(col.id)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors ${visibleColumns[col.id] ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                >
+                                    <div className={`w-3 h-3 rounded-sm border flex items-center justify-center ${visibleColumns[col.id] ? 'border-blue-500 bg-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                                        {visibleColumns[col.id] && <div className="w-1.5 h-1.5 bg-white rounded-[1px]"></div>}
+                                    </div>
+                                    {col.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
                 </>
-              )}
-            </div>
-            <button
-              onClick={() => setCurrentView('specbook')}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 transition px-4 py-2 rounded-md text-sm font-semibold"
-              title="View Spec Book"
-            >
-              <Book size={16} /> Spec Book
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition px-4 py-2 rounded-md text-sm font-semibold"
-            >
-              <Printer size={16} /> Print / Save PDF
-            </button>
-            <div className="w-px h-8 bg-gray-600 mx-1"></div>
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 rounded-md hover:bg-gray-700 transition text-gray-300 hover:text-white"
-              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
+            )}
           </div>
         </div>
       </div>
@@ -1876,6 +1918,7 @@ export default function App() {
                         {visibleColumns.qty && <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>}
                         {visibleColumns.unitPrice && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>}
                         {visibleColumns.total && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>}
+                        {visibleColumns.tax && <th style={{ padding: '12px 16px', width: '60px', textAlign: 'center' }}>Tax</th>}
                         {visibleColumns.leadTime && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>}
                         {visibleColumns.notes && <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>}
                         <th style={{ padding: '12px 16px', width: '90px', textAlign: 'center' }}>Actions</th>
@@ -1996,6 +2039,18 @@ export default function App() {
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white bg-gray-50/50 dark:bg-gray-700/30">
                             {formatCurrency(item.qty * item.unitPrice)}
                           </td>
+                          )}
+                          {/* Tax Toggle */}
+                          {visibleColumns.tax && (
+                            <td className="px-4 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={item.isTaxable !== false}
+                                onChange={(e) => updateItem(category.id, item.id, 'isTaxable', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                title="Toggle Taxable Status"
+                              />
+                            </td>
                           )}
                           {/* Lead time field */}
                           {visibleColumns.leadTime && (
