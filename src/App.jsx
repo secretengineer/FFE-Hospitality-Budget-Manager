@@ -119,6 +119,50 @@ const AutoResizeTextarea = ({ value, onChange, placeholder, className, style, ..
 };
 
 /**
+ * ConfirmationModal Component
+ * A custom modal dialog for confirming user actions.
+ * Replaces the native window.confirm() for a more consistent UI.
+ */
+const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 print:hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+          <button
+            onClick={onCancel}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <p className="text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
+          {message}
+        </p>
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-medium shadow-sm"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * SpecEditorModal Component
  * Modal for editing detailed specifications for a line item.
  * Supports rich text description and file attachments.
@@ -439,6 +483,17 @@ export default function App() {
   const [showPrintModal, setShowPrintModal] = useState(false);
 
   /**
+   * Confirmation Modal State
+   * Manages the visibility and content of the custom confirmation dialog.
+   */
+  const [confirmationModal, setConfirmationModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null
+  });
+
+  /**
    * Dark Mode State
    * Manages application theme preference.
    * Persists to localStorage.
@@ -607,48 +662,56 @@ export default function App() {
    * Prompts user if there are unsaved changes.
    */
   const handleNewDocument = () => {
+    const executeNewDocument = () => {
+      // Reset to default state
+      setProjectInfo({
+        name: "Project Name",
+        address: "project address goes here, city, state, zip code",
+        date: new Date().toISOString().split('T')[0],
+        client: "Development Group LLC",
+        allowance: 750000,
+        salesTaxRate: 10.25,
+        companyName: "Pat Ryan Things LLC.",
+        companyAddress: "1521 Syracuse St, Denver, CO 80220",
+        companyPhone: "303 434 4595",
+        companyEmail: "pat@patryan.com",
+        logoUrl: "src/assets/PRThingsTempLogo.png",
+        terms: [
+          "1. Estimates are valid for 30 days from date of issue.",
+          "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+          "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+        ]
+      });
+
+      setCategories([
+        {
+          id: 'foh',
+          title: 'Front of House | Furniture & Equipment',
+          icon: Armchair,
+          color: 'text-blue-600',
+          items: [
+            { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
+          ]
+        }
+      ]);
+
+      setFileHandle(null);
+      setHasUnsavedChanges(false);
+      setCurrentView('budget');
+      setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+    };
+
     if (hasUnsavedChanges) {
-      const confirmed = window.confirm(
-        'You have unsaved changes. Are you sure you want to create a new document?'
-      );
-      if (!confirmed) return;
+      setConfirmationModal({
+        isOpen: true,
+        title: 'Create New Document',
+        message: 'You have unsaved changes. Are you sure you want to create a new document? Any unsaved progress will be lost.',
+        onConfirm: executeNewDocument
+      });
+      return;
     }
 
-    // Reset to default state
-    setProjectInfo({
-      name: "Project Name",
-      address: "project address goes here, city, state, zip code",
-      date: new Date().toISOString().split('T')[0],
-      client: "Development Group LLC",
-      allowance: 750000,
-      salesTaxRate: 10.25,
-      companyName: "Pat Ryan Things LLC.",
-      companyAddress: "1521 Syracuse St, Denver, CO 80220",
-      companyPhone: "303 434 4595",
-      companyEmail: "pat@patryan.com",
-      logoUrl: "src/assets/PRThingsTempLogo.png",
-      terms: [
-        "1. Estimates are valid for 30 days from date of issue.",
-        "2. Freight and delivery charges are estimated and will be billed at actual cost.",
-        "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
-      ]
-    });
-
-    setCategories([
-      {
-        id: 'foh',
-        title: 'Front of House | Furniture & Equipment',
-        icon: Armchair,
-        color: 'text-blue-600',
-        items: [
-          { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
-        ]
-      }
-    ]);
-
-    setFileHandle(null);
-    setHasUnsavedChanges(false);
-    setCurrentView('budget');
+    executeNewDocument();
   };
 
   /**
@@ -760,86 +823,95 @@ export default function App() {
    * Reconstructs category icons and colors from saved data.
    */
   const handleOpen = async () => {
+    const executeOpen = async () => {
+      setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+      
+      try {
+        // Show file picker
+        const [handle] = await window.showOpenFilePicker({
+          types: [
+            {
+              description: 'FFE Budget Files',
+              accept: { 'application/json': ['.ffe'] }
+            }
+          ],
+          multiple: false
+        });
+  
+        // Read file contents
+        const file = await handle.getFile();
+        const contents = await file.text();
+        const documentData = JSON.parse(contents);
+  
+        // Validate document structure
+        if (!documentData.projectInfo || !documentData.categories) {
+          throw new Error('Invalid file format');
+        }
+  
+        // Icon mapping for reconstructing categories
+        const iconMap = {
+          'foh': { icon: Armchair, color: 'text-blue-600' },
+          'custom': { icon: Lightbulb, color: 'text-amber-600' },
+          'wayfinding': { icon: Signpost, color: 'text-purple-600' },
+          'exterior': { icon: TreePine, color: 'text-emerald-600' },
+          'fees': { icon: Briefcase, color: 'text-gray-600' }
+        };
+  
+        // Reconstruct categories with icons and sanitize items
+        const loadedCategories = (Array.isArray(documentData.categories) ? documentData.categories : []).map(cat => ({
+          ...cat,
+          icon: iconMap[cat.id]?.icon || Layout,
+          color: cat.color || iconMap[cat.id]?.color || 'text-gray-600',
+          // Sanitize items: ensure it's an array and flatten if nested (fix for previous bug)
+          items: Array.isArray(cat.items)
+            ? cat.items.flat().map(item => ({
+              ...item,
+              // Ensure numeric values are numbers
+              qty: Number(item.qty) || 0,
+              unitPrice: Number(item.unitPrice) || 0,
+              // Add specs field for backward compatibility with old files
+              specs: item.specs || { detailedDescription: '', attachments: [] }
+            }))
+            : []
+        }));
+  
+        // Load data into state with backward compatibility
+        const loadedProjectInfo = {
+          ...documentData.projectInfo,
+          // Add default terms if not present in old files
+          terms: documentData.projectInfo.terms || [
+            "1. Estimates are valid for 30 days from date of issue.",
+            "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+            "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+          ]
+        };
+  
+        setProjectInfo(loadedProjectInfo);
+        setCategories(loadedCategories);
+        setFileHandle(handle);
+        setHasUnsavedChanges(false);
+        setCurrentView('budget');
+  
+        // alert('Document loaded successfully!'); // Removed alert for smoother UX
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Open error:', error);
+          alert(`Failed to open document. Error: ${error.message}`);
+        }
+      }
+    };
+
     if (hasUnsavedChanges) {
-      const confirmed = window.confirm(
-        'You have unsaved changes. Are you sure you want to open a different document?'
-      );
-      if (!confirmed) return;
-    }
-
-    try {
-      // Show file picker
-      const [handle] = await window.showOpenFilePicker({
-        types: [
-          {
-            description: 'FFE Budget Files',
-            accept: { 'application/json': ['.ffe'] }
-          }
-        ],
-        multiple: false
+      setConfirmationModal({
+        isOpen: true,
+        title: 'Open Document',
+        message: 'You have unsaved changes. Are you sure you want to open a different document? Any unsaved progress will be lost.',
+        onConfirm: executeOpen
       });
-
-      // Read file contents
-      const file = await handle.getFile();
-      const contents = await file.text();
-      const documentData = JSON.parse(contents);
-
-      // Validate document structure
-      if (!documentData.projectInfo || !documentData.categories) {
-        throw new Error('Invalid file format');
-      }
-
-      // Icon mapping for reconstructing categories
-      const iconMap = {
-        'foh': { icon: Armchair, color: 'text-blue-600' },
-        'custom': { icon: Lightbulb, color: 'text-amber-600' },
-        'wayfinding': { icon: Signpost, color: 'text-purple-600' },
-        'exterior': { icon: TreePine, color: 'text-emerald-600' },
-        'fees': { icon: Briefcase, color: 'text-gray-600' }
-      };
-
-      // Reconstruct categories with icons and sanitize items
-      const loadedCategories = (Array.isArray(documentData.categories) ? documentData.categories : []).map(cat => ({
-        ...cat,
-        icon: iconMap[cat.id]?.icon || Layout,
-        color: cat.color || iconMap[cat.id]?.color || 'text-gray-600',
-        // Sanitize items: ensure it's an array and flatten if nested (fix for previous bug)
-        items: Array.isArray(cat.items)
-          ? cat.items.flat().map(item => ({
-            ...item,
-            // Ensure numeric values are numbers
-            qty: Number(item.qty) || 0,
-            unitPrice: Number(item.unitPrice) || 0,
-            // Add specs field for backward compatibility with old files
-            specs: item.specs || { detailedDescription: '', attachments: [] }
-          }))
-          : []
-      }));
-
-      // Load data into state with backward compatibility
-      const loadedProjectInfo = {
-        ...documentData.projectInfo,
-        // Add default terms if not present in old files
-        terms: documentData.projectInfo.terms || [
-          "1. Estimates are valid for 30 days from date of issue.",
-          "2. Freight and delivery charges are estimated and will be billed at actual cost.",
-          "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
-        ]
-      };
-
-      setProjectInfo(loadedProjectInfo);
-      setCategories(loadedCategories);
-      setFileHandle(handle);
-      setHasUnsavedChanges(false);
-      setCurrentView('budget');
-
-      // alert('Document loaded successfully!'); // Removed alert for smoother UX
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Open error:', error);
-        alert(`Failed to open document. Error: ${error.message}`);
-      }
+      return;
     }
+
+    executeOpen();
   };
 
   // ============================================================================
@@ -907,8 +979,9 @@ export default function App() {
    * Uses timestamp as unique ID to prevent collisions.
    * 
    * @param {string} catId - Category ID to add the item to
+   * @param {number} [index] - Optional index to insert the item at. If omitted, appends to end.
    */
-  const addItem = (catId) => {
+  const addItem = (catId, index) => {
     const newItem = {
       id: Date.now(), // Using timestamp as unique ID
       mfr: '',
@@ -924,7 +997,37 @@ export default function App() {
 
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
+      
+      if (typeof index === 'number' && index >= 0 && index <= cat.items.length) {
+        const newItems = [...cat.items];
+        newItems.splice(index, 0, newItem);
+        return { ...cat, items: newItems };
+      }
+      
       return { ...cat, items: [...cat.items, newItem] };
+    }));
+  };
+
+  /**
+   * Move Line Item
+   * Moves an item up or down within its category.
+   * 
+   * @param {string} catId - Category ID
+   * @param {number} index - Current index of the item
+   * @param {string} direction - 'up' or 'down'
+   */
+  const moveItem = (catId, index, direction) => {
+    setCategories(prev => prev.map(cat => {
+      if (cat.id !== catId) return cat;
+      
+      const newItems = [...cat.items];
+      if (direction === 'up' && index > 0) {
+        [newItems[index], newItems[index - 1]] = [newItems[index - 1], newItems[index]];
+      } else if (direction === 'down' && index < newItems.length - 1) {
+        [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+      }
+      
+      return { ...cat, items: newItems };
     }));
   };
 
@@ -978,8 +1081,9 @@ export default function App() {
    * Add New Category/Section
    * Creates a new budget category with default settings.
    * Uses timestamp for unique ID and includes one empty line item.
+   * @param {number} [index] - Optional index to insert the category at. If omitted, appends to end.
    */
-  const addCategory = () => {
+  const addCategory = (index) => {
     const newCategory = {
       id: `cat_${Date.now()}`,
       title: 'New Section',
@@ -989,7 +1093,15 @@ export default function App() {
         { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', notes: '', specs: { detailedDescription: '', attachments: [] } }
       ]
     };
-    setCategories(prev => [...prev, newCategory]);
+    
+    setCategories(prev => {
+      if (typeof index === 'number' && index >= 0 && index <= prev.length) {
+        const newCategories = [...prev];
+        newCategories.splice(index, 0, newCategory);
+        return newCategories;
+      }
+      return [...prev, newCategory];
+    });
   };
 
   /**
@@ -1015,12 +1127,16 @@ export default function App() {
    */
   const removeCategory = (catId) => {
     const category = categories.find(cat => cat.id === catId);
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the "${category?.title}" section? This will remove all line items in this section.`
-    );
-    if (confirmed) {
-      setCategories(prev => prev.filter(cat => cat.id !== catId));
-    }
+    
+    setConfirmationModal({
+      isOpen: true,
+      title: 'Delete Section',
+      message: `Are you sure you want to delete the "${category?.title}" section? This will remove all line items in this section.`,
+      onConfirm: () => {
+        setCategories(prev => prev.filter(cat => cat.id !== catId));
+        setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   /**
@@ -1356,6 +1472,15 @@ export default function App() {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
 
+        {/* Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          title={confirmationModal.title}
+          message={confirmationModal.message}
+          onConfirm={confirmationModal.onConfirm}
+          onCancel={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
+        />
+
         {/* Spec Editor Modal */}
         {specEditorState.isOpen && (
           <SpecEditorModal
@@ -1399,7 +1524,7 @@ export default function App() {
                   placeholder="Company Address"
                   style={{ outline: 'none' }}
                 />
-                <div className="flex gap-3 text-sm text-gray-500 dark:text-gray-400 print:text-gray-600 mt-1">
+                <div className="flex gap-3 text-sm text-gray-500 dark:text-gray-500 print:text-gray-600 mt-1">
                   <input
                     type="text"
                     value={projectInfo.companyPhone}
@@ -1423,6 +1548,15 @@ export default function App() {
 
             {/* Date - Top Right */}
             <div className="text-right">
+              {fileHandle && (
+                <div className="mb-4 print:hidden">
+                  <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Current File</div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center justify-end gap-1.5 bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                    <FileText size={14} className="text-blue-500" />
+                    <span className="truncate max-w-[200px]" title={fileHandle.name}>{fileHandle.name}</span>
+                  </div>
+                </div>
+              )}
               <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-1">Date</div>
               <input
                 type="date"
@@ -1439,7 +1573,7 @@ export default function App() {
 
               {/* Project Name - Spans 2 columns */}
               <div className="lg:col-span-2">
-                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-2">Project Name</label>
+                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-900">Project Name</label>
                 <AutoResizeTextarea
                   value={projectInfo.name}
                   onChange={(e) => handleProjectUpdate('name', e.target.value)}
@@ -1450,7 +1584,7 @@ export default function App() {
 
                 {/* Client - Below Project Name */}
                 <div className="mt-6">
-                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-2">Client</label>
+                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-900">Client</label>
                   <AutoResizeTextarea
                     value={projectInfo.client}
                     onChange={(e) => handleProjectUpdate('client', e.target.value)}
@@ -1463,7 +1597,7 @@ export default function App() {
 
               {/* Location/Address */}
               <div>
-                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-500 uppercase tracking-wider mb-2">Location / Address</label>
+                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 print:text-gray-900">Location / Address</label>
                 <AutoResizeTextarea
                   value={projectInfo.address}
                   onChange={(e) => handleProjectUpdate('address', e.target.value)}
@@ -1539,9 +1673,23 @@ export default function App() {
 
         {/* ===== BUDGET CATEGORIES ===== */}
         {/* Iterates through all categories to display line item tables */}
-        <div className="space-y-8">
-          {categories.map((category) => (
-            <div key={category.id} className="break-inside-avoid group">
+        <div className="flex flex-col pb-4">
+          {categories.map((category, index) => (
+            <React.Fragment key={category.id}>
+              {/* Insert Section Divider */}
+              <div 
+                className="print:hidden h-4 hover:h-12 transition-all duration-200 flex items-center justify-center group/divider cursor-pointer relative z-10 my-1"
+                onClick={() => addCategory(index)}
+                title="Insert New Section Here"
+              >
+                <div className="absolute w-full h-px bg-transparent group-hover/divider:bg-blue-300 dark:group-hover/divider:bg-blue-700 transition-colors"></div>
+                <button className="bg-gray-50 dark:bg-gray-800 text-gray-400 group-hover/divider:text-blue-600 dark:group-hover/divider:text-blue-400 group-hover/divider:bg-white dark:group-hover/divider:bg-gray-800 px-3 py-1 rounded-full transition-all transform scale-0 group-hover/divider:scale-100 opacity-0 group-hover/divider:opacity-100 flex items-center gap-2 border border-transparent group-hover/divider:border-blue-200 dark:group-hover/divider:border-blue-700 shadow-sm z-20">
+                  <Plus size={14} />
+                  <span className="text-xs font-bold uppercase tracking-wide">Insert Section</span>
+                </button>
+              </div>
+
+              <div className="break-inside-avoid group">
               <Card className="overflow-hidden">
                 <SectionHeader
                   icon={category.icon}
@@ -1574,7 +1722,25 @@ export default function App() {
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {/* Map through each line item in category */}
                       {category.items.map((item, index) => (
-                        <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
+                        <React.Fragment key={item.id}>
+                          {/* Insert Row Divider */}
+                          <tr className="print:hidden h-0 hover:h-auto group/divider">
+                            <td colSpan="11" className="p-0 border-none">
+                              <div 
+                                className="h-2 hover:h-8 transition-all duration-200 flex items-center justify-center cursor-pointer relative z-10 -my-1"
+                                onClick={() => addItem(category.id, index)}
+                                title="Insert New Row Here"
+                              >
+                                <div className="absolute w-full h-px bg-transparent group-hover/divider:bg-blue-300 dark:group-hover/divider:bg-blue-700 transition-colors"></div>
+                                <button className="bg-gray-50 dark:bg-gray-800 text-gray-400 group-hover/divider:text-blue-600 dark:group-hover/divider:text-blue-400 group-hover/divider:bg-white dark:group-hover/divider:bg-gray-800 px-2 py-0.5 rounded-full transition-all transform scale-0 group-hover/divider:scale-100 opacity-0 group-hover/divider:opacity-100 flex items-center gap-1 border border-transparent group-hover/divider:border-blue-200 dark:group-hover/divider:border-blue-700 shadow-sm z-20 text-[10px] font-bold uppercase tracking-wide">
+                                  <Plus size={10} />
+                                  <span>Insert Row</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
                           {/* Row number (1-indexed for user readability) */}
                           <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
                           {/* Manufacturer/Vendor field */}
@@ -1706,61 +1872,57 @@ export default function App() {
                             textAlign: 'center',
                             display: 'table-cell'
                           }}>
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                removeItem(category.id, item.id);
-                              }}
-                              aria-label="Delete item"
-                              title="Delete this item"
-                              type="button"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '4px',
-                                border: 'none',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                                color: '#9ca3af'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.color = '#ef4444';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.color = '#9ca3af';
-                              }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => duplicateItem(category.id, item)}
-                              className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 p-1"
-                              title="Duplicate Item"
-                            >
-                              <Copy size={16} />
-                            </button>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-center gap-1">
                               <button
-                                onClick={() => moveItem(category.id, index, 'up')}
-                                disabled={index === 0}
-                                className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
-                                title="Move Up"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  removeItem(category.id, item.id);
+                                }}
+                                aria-label="Delete item"
+                                title="Delete this item"
+                                type="button"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '4px',
+                                  border: 'none',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  color: '#9ca3af'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = '#ef4444';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = '#9ca3af';
+                                }}
                               >
-                                <ArrowUp size={12} />
+                                <Trash2 size={16} />
                               </button>
-                              <button
-                                onClick={() => moveItem(category.id, index, 'down')}
-                                disabled={index === category.items.length - 1}
-                                className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
-                                title="Move Down"
-                              >
-                                <ArrowDown size={12} />
-                              </button>
+                              <div className="flex flex-col gap-1">
+                                <button
+                                  onClick={() => moveItem(category.id, index, 'up')}
+                                  disabled={index === 0}
+                                  className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
+                                  title="Move Up"
+                                >
+                                  <ArrowUp size={12} />
+                                </button>
+                                <button
+                                  onClick={() => moveItem(category.id, index, 'down')}
+                                  disabled={index === category.items.length - 1}
+                                  className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
+                                  title="Move Down"
+                                >
+                                  <ArrowDown size={12} />
+                                </button>
+                              </div>
                             </div>
                           </td>
                         </tr>
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -1778,6 +1940,7 @@ export default function App() {
                 </div>
               </Card>
             </div>
+            </React.Fragment>
           ))}
 
           {/* Add New Section Button */}
