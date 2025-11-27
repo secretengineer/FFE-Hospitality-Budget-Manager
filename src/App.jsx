@@ -36,7 +36,7 @@ import {
  * @returns {JSX.Element} Styled card container
  */
 const Card = ({ children, className = "" }) => (
-  <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 ${className}`}>
+  <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 print:bg-white print:border-gray-200 print:shadow-none ${className}`}>
     {children}
   </div>
 );
@@ -57,7 +57,7 @@ const Card = ({ children, className = "" }) => (
  * @returns {JSX.Element} Styled section header
  */
 const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800", onTitleChange, onDelete }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 rounded-t-lg print:bg-white">
+  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 rounded-t-lg print:bg-gray-50 print:border-gray-200 print:text-black">
     <div className="flex items-center gap-3 flex-1">
       <div className={`p-2 rounded-md ${colorClass} bg-opacity-10 dark:bg-opacity-20`}>
         <Icon size={20} className={colorClass} />
@@ -66,7 +66,7 @@ const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800",
         type="text"
         value={title}
         onChange={(e) => onTitleChange && onTitleChange(e.target.value)}
-        className="font-bold text-lg text-gray-800 dark:text-gray-100 uppercase tracking-wide bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1"
+        className="font-bold text-lg text-gray-800 dark:text-gray-100 uppercase tracking-wide bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1 print:text-black"
         style={{ outline: 'none' }}
       />
       {onDelete && (
@@ -80,11 +80,40 @@ const SectionHeader = ({ icon: Icon, title, total, colorClass = "text-gray-800",
       )}
     </div>
     <div className="text-right">
-      <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase">Subtotal</div>
-      <div className="font-bold text-xl font-mono text-gray-900 dark:text-white">{total}</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase print:text-gray-600">Subtotal</div>
+      <div className="font-bold text-xl font-mono text-gray-900 dark:text-white print:text-black">{total}</div>
     </div>
   </div>
 );
+
+/**
+ * AutoResizeTextarea Component
+ * A textarea that automatically adjusts its height to fit content.
+ * Used for table cells to prevent content truncation.
+ */
+const AutoResizeTextarea = ({ value, onChange, placeholder, className, style, ...props }) => {
+  const textareaRef = React.useRef(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={`resize-none overflow-hidden ${className} print:text-black print:placeholder-transparent`}
+      style={{ ...style, minHeight: '32px' }}
+      rows={1}
+      {...props}
+    />
+  );
+};
 
 // ============================================================================
 // MAIN APPLICATION COMPONENT
@@ -225,6 +254,21 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   /**
+   * View State
+   * Controls the current view of the application.
+   * 'welcome' - Initial launch screen
+   * 'budget' - Main budget editor
+   */
+  const [currentView, setCurrentView] = useState('welcome');
+
+  /**
+   * Recent Draft State
+   * Stores metadata about the auto-saved draft to show on welcome screen.
+   */
+  const [hasRecentDraft, setHasRecentDraft] = useState(false);
+  const [draftInfo, setDraftInfo] = useState(null);
+
+  /**
    * Print Settings State
    * Controls the layout and formatting of the printed document.
    */
@@ -289,39 +333,21 @@ export default function App() {
 
   /**
    * Recovery Effect
-   * Checks for auto-saved data on mount and prompts user to restore.
+   * Checks for auto-saved data on mount.
    */
   useEffect(() => {
     const savedState = localStorage.getItem('ffe_autosave');
     if (savedState) {
       try {
         const parsedState = JSON.parse(savedState);
-        // Simple check to see if it's different from default/empty
-        // In a real app, might want more robust comparison or timestamp check
         const hasData = parsedState.categories.some(cat => cat.items.length > 0 && (cat.items[0].desc !== '' || cat.items.length > 1));
 
         if (hasData) {
-          const shouldRestore = window.confirm('Found an unsaved draft from a previous session. Would you like to restore it?');
-          if (shouldRestore) {
-            // Icon mapping for reconstructing categories
-            const iconMap = {
-              'foh': { icon: Armchair, color: 'text-blue-600' },
-              'custom': { icon: Lightbulb, color: 'text-amber-600' },
-              'wayfinding': { icon: Signpost, color: 'text-purple-600' },
-              'exterior': { icon: TreePine, color: 'text-emerald-600' },
-              'fees': { icon: Briefcase, color: 'text-gray-600' }
-            };
-
-            const loadedCategories = parsedState.categories.map(cat => ({
-              ...cat,
-              icon: iconMap[cat.id]?.icon || Layout,
-              color: cat.color || iconMap[cat.id]?.color || 'text-gray-600'
-            }));
-
-            setProjectInfo(parsedState.projectInfo);
-            setCategories(loadedCategories);
-            setHasUnsavedChanges(true); // Mark as unsaved since it's restored from local storage
-          }
+          setHasRecentDraft(true);
+          setDraftInfo({
+            projectName: parsedState.projectInfo.name,
+            lastSaved: new Date(parsedState.savedAt).toLocaleString()
+          });
         }
       } catch (e) {
         console.error('Failed to parse auto-save data', e);
@@ -460,6 +486,7 @@ export default function App() {
 
     setFileHandle(null);
     setHasUnsavedChanges(false);
+    setCurrentView('budget');
   };
 
   /**
@@ -610,10 +637,20 @@ export default function App() {
       };
 
       // Reconstruct categories with icons
-      const loadedCategories = documentData.categories.map(cat => ({
+      // Reconstruct categories with icons and sanitize items
+      const loadedCategories = (Array.isArray(documentData.categories) ? documentData.categories : []).map(cat => ({
         ...cat,
         icon: iconMap[cat.id]?.icon || Layout,
-        color: cat.color || iconMap[cat.id]?.color || 'text-gray-600'
+        color: cat.color || iconMap[cat.id]?.color || 'text-gray-600',
+        // Sanitize items: ensure it's an array and flatten if nested (fix for previous bug)
+        items: Array.isArray(cat.items)
+          ? cat.items.flat().map(item => ({
+            ...item,
+            // Ensure numeric values are numbers
+            qty: Number(item.qty) || 0,
+            unitPrice: Number(item.unitPrice) || 0
+          }))
+          : []
       }));
 
       // Load data into state
@@ -621,12 +658,13 @@ export default function App() {
       setCategories(loadedCategories);
       setFileHandle(handle);
       setHasUnsavedChanges(false);
+      setCurrentView('budget');
 
-      alert('Document loaded successfully!');
+      // alert('Document loaded successfully!'); // Removed alert for smoother UX
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Open error:', error);
-        alert('Failed to open document. Please ensure it is a valid FFE budget file.');
+        alert(`Failed to open document. Error: ${error.message}`);
       }
     }
   };
@@ -806,9 +844,150 @@ export default function App() {
     }, 100);
   };
 
+  /**
+   * Load Draft
+   * Loads the auto-saved draft from localStorage.
+   */
+  const handleLoadDraft = () => {
+    const savedState = localStorage.getItem('ffe_autosave');
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState);
+
+        // Icon mapping for reconstructing categories
+        const iconMap = {
+          'foh': { icon: Armchair, color: 'text-blue-600' },
+          'custom': { icon: Lightbulb, color: 'text-amber-600' },
+          'wayfinding': { icon: Signpost, color: 'text-purple-600' },
+          'exterior': { icon: TreePine, color: 'text-emerald-600' },
+          'fees': { icon: Briefcase, color: 'text-gray-600' }
+        };
+
+        const loadedCategories = parsedState.categories.map(cat => ({
+          ...cat,
+          icon: iconMap[cat.id]?.icon || Layout,
+          color: cat.color || iconMap[cat.id]?.color || 'text-gray-600'
+        }));
+
+        setProjectInfo(parsedState.projectInfo);
+        setCategories(loadedCategories);
+        setHasUnsavedChanges(true);
+        setCurrentView('budget');
+      } catch (e) {
+        console.error('Failed to load draft', e);
+        alert('Failed to load draft. Data may be corrupted.');
+      }
+    }
+  };
+
   // ============================================================================
   // RENDER
   // ============================================================================
+
+  if (currentView === 'welcome') {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4 font-sans transition-colors duration-200">
+        <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+
+          {/* Welcome Info */}
+          <div className="flex flex-col justify-center text-gray-800 dark:text-gray-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-blue-600 rounded-lg shadow-lg">
+                <Layout className="text-white w-8 h-8" />
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight">BudgetBuilder™</h1>
+            </div>
+            <h2 className="text-4xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+              Hospitality FF&E Manager
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
+              Professional budgeting tool for interior designers and procurement agents.
+              Manage furniture, fixtures, and equipment with ease.
+            </p>
+
+            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-500">
+              <div className="flex items-center gap-1">
+                <Moon size={16} /> Dark Mode
+              </div>
+              <div className="flex items-center gap-1">
+                <Printer size={16} /> Print Ready
+              </div>
+              <div className="flex items-center gap-1">
+                <Save size={16} /> Auto-Save
+              </div>
+            </div>
+          </div>
+
+          {/* Actions Card */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Get Started</h3>
+
+            <div className="space-y-4">
+              {hasRecentDraft && (
+                <button
+                  onClick={handleLoadDraft}
+                  className="w-full group relative flex items-start gap-4 p-4 rounded-xl border-2 border-blue-100 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-900/10 hover:border-blue-500 dark:hover:border-blue-500 transition-all text-left"
+                >
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                    <Briefcase size={24} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white">Continue Draft</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {draftInfo?.projectName || 'Untitled Project'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Last saved: {draftInfo?.lastSaved}
+                    </div>
+                  </div>
+                  <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                </button>
+              )}
+
+              <button
+                onClick={handleNewDocument}
+                className="w-full group flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left"
+              >
+                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  <Plus size={24} />
+                </div>
+                <div>
+                  <div className="font-bold text-gray-900 dark:text-white">New Project</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Start a fresh budget from scratch</div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleOpen}
+                className="w-full group flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left"
+              >
+                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                  <FolderOpen size={24} />
+                </div>
+                <div>
+                  <div className="font-bold text-gray-900 dark:text-white">Open Existing</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Load a previously saved .ffe file</div>
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+              <div className="text-xs text-gray-400">
+                v1.0.0 • Pat Ryan Things LLC
+              </div>
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans text-gray-800 dark:text-gray-100 print:bg-white pb-20 transition-colors duration-200">
@@ -1161,57 +1340,47 @@ export default function App() {
                           {/* Row number (1-indexed for user readability) */}
                           <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
                           {/* Manufacturer/Vendor field */}
-                          <td style={{ padding: '8px 16px' }}>
-                            <textarea
+                          <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
+                            <AutoResizeTextarea
                               style={{
                                 width: '100%',
-                                minHeight: '32px',
                                 backgroundColor: 'transparent',
                                 border: '1px solid transparent',
                                 borderRadius: '4px',
                                 padding: '4px',
                                 fontSize: '14px',
                                 fontWeight: '500',
-                                resize: 'vertical',
                                 fontFamily: 'inherit',
                                 lineHeight: '1.5'
                               }}
-                              className="text-gray-900 dark:text-gray-100"
+                              className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
                               value={item.mfr}
                               onChange={(e) => updateItem(category.id, item.id, 'mfr', e.target.value)}
                               placeholder="Mfr Name"
-                              rows={1}
-                              onFocus={(e) => e.target.style.border = '1px solid #3b82f6'}
-                              onBlur={(e) => e.target.style.border = '1px solid transparent'}
                             />
                           </td>
                           {/* Item description field */}
-                          <td style={{ padding: '8px 16px' }}>
-                            <textarea
+                          <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
+                            <AutoResizeTextarea
                               style={{
                                 width: '100%',
-                                minHeight: '32px',
                                 backgroundColor: 'transparent',
                                 border: '1px solid transparent',
                                 borderRadius: '4px',
                                 padding: '4px',
                                 fontSize: '14px',
-                                resize: 'vertical',
                                 fontFamily: 'inherit',
                                 lineHeight: '1.5'
                               }}
-                              className="text-gray-900 dark:text-gray-100"
+                              className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
                               value={item.desc}
                               onChange={(e) => updateItem(category.id, item.id, 'desc', e.target.value)}
                               placeholder="Item Description"
-                              rows={1}
-                              onFocus={(e) => e.target.style.border = '1px solid #3b82f6'}
-                              onBlur={(e) => e.target.style.border = '1px solid transparent'}
                             />
                           </td>
                           {/* Dimensions field */}
-                          <td className="px-4 py-2">
-                            <input
+                          <td className="px-4 py-2 align-top">
+                            <AutoResizeTextarea
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
                               value={item.dimensions}
                               onChange={(e) => updateItem(category.id, item.id, 'dimensions', e.target.value)}
@@ -1219,8 +1388,8 @@ export default function App() {
                             />
                           </td>
                           {/* Lead time field */}
-                          <td className="px-4 py-2">
-                            <input
+                          <td className="px-4 py-2 align-top">
+                            <AutoResizeTextarea
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
                               value={item.leadTime}
                               onChange={(e) => updateItem(category.id, item.id, 'leadTime', e.target.value)}
@@ -1267,8 +1436,8 @@ export default function App() {
                             {formatCurrency(item.qty * item.unitPrice)}
                           </td>
                           {/* Notes field - for finish, color, or special instructions */}
-                          <td className="px-4 py-2">
-                            <input
+                          <td className="px-4 py-2 align-top">
+                            <AutoResizeTextarea
                               className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-xs p-1 text-gray-500 dark:text-gray-400 italic placeholder-gray-300"
                               value={item.notes}
                               onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
@@ -1341,28 +1510,14 @@ export default function App() {
                   </table>
                 </div>
 
-                {/* Add Item Button - Visible in browser, hidden when printing */}
-                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 border-t border-gray-200 dark:border-gray-700 block">
+                {/* Add Item Button - Footer of the card */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-100 dark:border-gray-700 rounded-b-lg print:hidden">
                   <button
                     onClick={() => addItem(category.id)}
-                    aria-label={`Add item to ${category.title}`}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#2563eb',
-                      padding: '4px 8px',
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      borderRadius: '4px'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#1e40af'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#2563eb'}
+                    className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-sm"
                   >
-                    <Plus size={16} /> Add {category.title.split('|')[0]} Item
+                    <Plus size={16} />
+                    Add {category.title.split('|')[0].trim()} Item
                   </button>
                 </div>
               </Card>
@@ -1400,7 +1555,7 @@ export default function App() {
           </div>
         </div>
 
-      </div>
+      </div >
 
       {/* ===== PRINT STYLES ===== */}
       {/* Inline styles for print media - controls page layout, margins, and footer content */}
@@ -1474,6 +1629,6 @@ export default function App() {
           }
         }
       `}</style>
-    </div>
+    </div >
   );
 }
