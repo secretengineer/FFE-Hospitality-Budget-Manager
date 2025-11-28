@@ -523,6 +523,13 @@ export default function App() {
   const [fileHandle, setFileHandle] = useState(null);
 
   /**
+   * Current File Name State
+   * Tracks the name of the currently loaded file for display.
+   * Works with both File System Access API and fallback methods.
+   */
+  const [currentFileName, setCurrentFileName] = useState(null);
+
+  /**
    * Unsaved Changes State
    * Tracks whether the document has unsaved changes to prompt user before closing.
    */
@@ -894,6 +901,7 @@ export default function App() {
       ]);
 
       setFileHandle(null);
+      setCurrentFileName(null);
       setHasUnsavedChanges(false);
       setCurrentView('budget');
       setConfirmationModal(prev => ({ ...prev, isOpen: false }));
@@ -935,6 +943,7 @@ export default function App() {
           ]
         });
         setFileHandle(handle);
+        setCurrentFileName(handle.name);
       }
 
       // Prepare document data (serialize categories by removing icon functions)
@@ -985,6 +994,7 @@ export default function App() {
       });
 
       setFileHandle(handle);
+      setCurrentFileName(handle.name);
 
       // Prepare document data
       const documentData = {
@@ -1087,6 +1097,7 @@ export default function App() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
+      setCurrentFileName(file.name);
       processFileContents(e.target.result, null);
     };
     reader.readAsText(file);
@@ -1123,6 +1134,7 @@ export default function App() {
           // Read file contents
           const file = await handle.getFile();
           const contents = await file.text();
+          setCurrentFileName(handle.name);
           processFileContents(contents, handle);
 
         } else {
@@ -2042,12 +2054,12 @@ export default function App() {
 
             {/* Date - Top Right */}
             <div className="text-right">
-              {fileHandle && (
+              {currentFileName && (
                 <div className="mb-4 print:hidden">
                   <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Current File</div>
                   <div className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center justify-end gap-1.5 bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
                     <FileText size={14} className="text-blue-500" />
-                    <span className="truncate max-w-[200px]" title={fileHandle.name}>{fileHandle.name}</span>
+                    <span className="truncate max-w-[200px]" title={currentFileName}>{currentFileName}</span>
                   </div>
                 </div>
               )}
