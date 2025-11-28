@@ -2116,7 +2116,7 @@ export default function App() {
                 type="number"
                 value={projectInfo.allowance}
                 onChange={(e) => handleProjectUpdate('allowance', parseFloat(e.target.value))}
-                className="text-2xl font-bold text-gray-800 dark:text-white w-full border-none focus:ring-0 p-0 bg-transparent"
+                className="text-2xl font-bold text-gray-800 dark:text-white w-full border-none focus:ring-0 p-0 bg-transparent [appearance:textfield]"
               />
             </div>
           </Card>
@@ -2139,7 +2139,7 @@ export default function App() {
                   type="number"
                   value={projectInfo.salesTaxRate}
                   onChange={(e) => handleProjectUpdate('salesTaxRate', parseFloat(e.target.value))}
-                  className="w-12 text-xs text-right border-none p-0 bg-gray-100 dark:bg-gray-700 dark:text-gray-200 rounded focus:ring-0"
+                  className="w-14 text-xs text-right border-none p-1 bg-gray-100 dark:bg-gray-700 dark:text-gray-200 rounded focus:ring-0"
                 />
                 <span className="text-xs text-gray-500">%</span>
               </div>
@@ -2307,7 +2307,7 @@ export default function App() {
                                 <td className="px-4 py-2">
                                   <input
                                     type="number"
-                                    className="w-full bg-blue-50/50 dark:bg-blue-900/20 border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-center font-bold text-gray-900 dark:text-white"
+                                    className="w-full bg-blue-50/50 dark:bg-blue-900/20 border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-2 text-center font-bold text-gray-900 dark:text-white"
                                     value={item.qty}
                                     onChange={(e) => updateItem(category.id, item.id, 'qty', parseFloat(e.target.value) || 0)}
                                   />
@@ -2320,7 +2320,7 @@ export default function App() {
                                     <span className="absolute left-2 text-gray-400 text-xs">$</span>
                                     <input
                                       type="number"
-                                      className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 pl-5 pr-7 text-right text-gray-600 dark:text-gray-300"
+                                      className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-2 pl-6 pr-8 text-right text-gray-600 dark:text-gray-300"
                                       value={item.unitPrice}
                                       onChange={(e) => updateItem(category.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                                     />
@@ -2545,6 +2545,17 @@ export default function App() {
       {/* ===== PRINT STYLES ===== */}
       {/* Inline styles for print media - controls page layout, margins, and footer content */}
       <style>{`
+        /* Remove number input spinners for cleaner look */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+
         @media print {
           /* Configure print page settings with margins and automatic footer content */
           @page {
