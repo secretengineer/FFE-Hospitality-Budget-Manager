@@ -2209,8 +2209,8 @@ export default function App() {
                           <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
                           {visibleColumns.dimensions && <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>}
                           {visibleColumns.qty && <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>}
-                          {visibleColumns.unitPrice && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>}
-                          {visibleColumns.total && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>}
+                          {visibleColumns.unitPrice && <th style={{ padding: '12px 16px', width: '140px', textAlign: 'right' }}>Unit Price</th>}
+                          {visibleColumns.total && <th style={{ padding: '12px 16px', width: '130px', textAlign: 'right' }}>Total</th>}
                           {visibleColumns.tax && <th style={{ padding: '12px 16px', width: '60px', textAlign: 'center' }}>Tax</th>}
                           {visibleColumns.leadTime && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>}
                           {visibleColumns.notes && <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>}
@@ -2320,9 +2320,10 @@ export default function App() {
                                     <span className="absolute left-2 text-gray-400 text-xs">$</span>
                                     <input
                                       type="number"
-                                      className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-2 pl-6 pr-8 text-right text-gray-600 dark:text-gray-300"
+                                      className="w-full min-w-0 bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-2 pl-6 pr-8 text-right text-gray-600 dark:text-gray-300 font-mono"
                                       value={item.unitPrice}
                                       onChange={(e) => updateItem(category.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                      step="0.01"
                                     />
                                     <button
                                       onClick={(e) => handlePriceSearch(e, category.id, item)}
@@ -2344,13 +2345,16 @@ export default function App() {
                               {/* Tax Toggle */}
                               {visibleColumns.tax && (
                                 <td className="px-4 py-2 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={item.isTaxable !== false}
-                                    onChange={(e) => updateItem(category.id, item.id, 'isTaxable', e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                  <button
+                                    type="button"
+                                    onClick={() => updateItem(category.id, item.id, 'isTaxable', !(item.isTaxable !== false))}
+                                    className="w-6 h-6 flex items-center justify-center text-xs font-bold transition-colors hover:text-blue-500 dark:hover:text-blue-300 print:hover:text-gray-900"
                                     title="Toggle Taxable Status"
-                                  />
+                                  >
+                                    {item.isTaxable !== false && (
+                                      <span className="text-blue-600 dark:text-blue-400 print:text-gray-900">T</span>
+                                    )}
+                                  </button>
                                 </td>
                               )}
                               {/* Lead time field */}
