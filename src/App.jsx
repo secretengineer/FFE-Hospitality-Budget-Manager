@@ -26,9 +26,15 @@ import {
   Eye,
   EyeOff,
   Menu,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Sparkles,
+  Loader2,
+  Search
 } from 'lucide-react';
 import SpecBookView from './SpecBookView';
+import SettingsModal from './SettingsModal';
+import PricingPopover from './PricingPopover';
+import { generateSpecFromImage, findPrice } from './services/ai';
 
 // ============================================================================
 // REUSABLE UI COMPONENTS
@@ -144,7 +150,7 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
             <X size={20} />
           </button>
         </div>
-        
+
         <p className="text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
           {message}
         </p>
@@ -176,8 +182,35 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
 const SpecEditorModal = ({ isOpen, onClose, item, categoryId, onSave }) => {
   const [detailedDescription, setDetailedDescription] = useState(item.specs?.detailedDescription || '');
   const [attachments, setAttachments] = useState(item.specs?.attachments || []);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleGenerateSpec = async () => {
+    // Find the first image attachment
+    const imageAttachment = attachments.find(att => att.type.startsWith('image/'));
+
+    if (!imageAttachment) {
+      alert('Please upload an image first to generate specifications.');
+      return;
+    }
+
+    const apiKey = localStorage.getItem('ffe_gemini_key');
+    if (!apiKey) {
+      alert('Please configure your Gemini API Key in Settings first.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const spec = await generateSpecFromImage(imageAttachment.dataUrl, apiKey);
+      setDetailedDescription(prev => prev ? `${prev}\n\n--- AI Generated ---\n${spec}` : spec);
+    } catch (error) {
+      alert(`Error generating spec: ${error.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSave = () => {
     onSave(categoryId, item.id, {
@@ -229,9 +262,24 @@ const SpecEditorModal = ({ isOpen, onClose, item, categoryId, onSave }) => {
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Detailed Description */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Detailed Description
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Detailed Description
+              </label>
+              <button
+                onClick={handleGenerateSpec}
+                disabled={isGenerating || attachments.length === 0}
+                className="text-xs flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                title="Generate description from uploaded image"
+              >
+                {isGenerating ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+                {isGenerating ? 'Analyzing...' : 'Auto-Fill with AI'}
+              </button>
+            </div>
             <textarea
               value={detailedDescription}
               onChange={(e) => setDetailedDescription(e.target.value)}
@@ -519,6 +567,7 @@ export default function App() {
   });
 
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   /**
    * Confirmation Modal State
@@ -530,6 +579,64 @@ export default function App() {
     message: '',
     onConfirm: null
   });
+
+  /**
+   * Pricing Popover State
+   */
+  const [pricingPopover, setPricingPopover] = useState({
+    isOpen: false,
+    results: [],
+    isLoading: false,
+    position: { top: 0, left: 0 },
+    targetItem: null // { categoryId, itemId }
+  });
+
+  const handlePriceSearch = async (e, categoryId, item) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    // Check for API keys
+    const apiKey = localStorage.getItem('ffe_search_key');
+    const cx = localStorage.getItem('ffe_search_engine_id');
+
+    if (!apiKey || !cx) {
+      alert('Please configure your Search API Key and Engine ID in Settings first.');
+      setShowSettingsModal(true);
+      return;
+    }
+
+    setPricingPopover({
+      isOpen: true,
+      results: [],
+      isLoading: true,
+      position: { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX },
+      targetItem: { categoryId, itemId: item.id }
+    });
+
+    try {
+      const query = `${item.mfr} ${item.desc} price`;
+      const results = await findPrice(query, apiKey, cx);
+      setPricingPopover(prev => ({ ...prev, isLoading: false, results }));
+    } catch (error) {
+      console.error(error);
+      setPricingPopover(prev => ({ ...prev, isLoading: false, results: [] }));
+      // Keep open to show empty/error state or just close?
+      // For now, let the popover handle empty state
+    }
+  };
+
+  const handlePriceSelect = (priceString) => {
+    if (!pricingPopover.targetItem) return;
+
+    // Extract number from string (e.g., "$1,234.00" -> 1234)
+    const numericPrice = parseFloat(priceString.replace(/[^0-9.]/g, ''));
+
+    if (!isNaN(numericPrice)) {
+      updateItem(pricingPopover.targetItem.categoryId, pricingPopover.targetItem.itemId, 'unitPrice', numericPrice);
+    }
+
+    setPricingPopover(prev => ({ ...prev, isOpen: false }));
+  };
 
   /**
    * Dark Mode State
@@ -581,6 +688,7 @@ export default function App() {
    * Ignores initial render by checking if this is the first update.
    */
   const isFirstRender = React.useRef(true);
+  const fileInputRef = React.useRef(null);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -907,83 +1015,121 @@ export default function App() {
   };
 
   /**
+   * Process File Contents
+   * Parses and loads the document data from JSON string.
+   */
+  const processFileContents = (contents, handle = null) => {
+    try {
+      const documentData = JSON.parse(contents);
+
+      // Validate document structure
+      if (!documentData.projectInfo || !documentData.categories) {
+        throw new Error('Invalid file format');
+      }
+
+      // Icon mapping for reconstructing categories
+      const iconMap = {
+        'foh': { icon: Armchair, color: 'text-blue-600' },
+        'custom': { icon: Lightbulb, color: 'text-amber-600' },
+        'wayfinding': { icon: Signpost, color: 'text-purple-600' },
+        'exterior': { icon: TreePine, color: 'text-emerald-600' },
+        'fees': { icon: Briefcase, color: 'text-gray-600' }
+      };
+
+      // Reconstruct categories with icons and sanitize items
+      const loadedCategories = (Array.isArray(documentData.categories) ? documentData.categories : []).map(cat => ({
+        ...cat,
+        icon: iconMap[cat.id]?.icon || Layout,
+        color: cat.color || iconMap[cat.id]?.color || 'text-gray-600',
+        // Sanitize items: ensure it's an array and flatten if nested (fix for previous bug)
+        items: Array.isArray(cat.items)
+          ? cat.items.flat().map(item => ({
+            ...item,
+            // Ensure numeric values are numbers
+            qty: Number(item.qty) || 0,
+            unitPrice: Number(item.unitPrice) || 0,
+            isTaxable: item.isTaxable !== false, // Default to true
+            // Add specs field for backward compatibility with old files
+            specs: item.specs || { detailedDescription: '', attachments: [] }
+          }))
+          : []
+      }));
+
+      // Load data into state with backward compatibility
+      const loadedProjectInfo = {
+        ...documentData.projectInfo,
+        // Add default terms if not present in old files
+        terms: documentData.projectInfo.terms || [
+          "1. Estimates are valid for 30 days from date of issue.",
+          "2. Freight and delivery charges are estimated and will be billed at actual cost.",
+          "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
+        ]
+      };
+
+      setProjectInfo(loadedProjectInfo);
+      setCategories(loadedCategories);
+      setFileHandle(handle);
+      setHasUnsavedChanges(false);
+      setCurrentView('budget');
+    } catch (error) {
+      console.error('Error processing file:', error);
+      alert(`Failed to parse document. Error: ${error.message}`);
+    }
+  };
+
+  /**
+   * Handle File Input Change
+   * Fallback for browsers that don't support File System Access API.
+   */
+  const handleFileInputChange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      processFileContents(e.target.result, null);
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be selected again
+    event.target.value = '';
+  };
+
+  /**
    * Open Document
    * Opens and loads a previously saved FFE budget file.
-   * Uses File System Access API for native open dialog.
-   * Reconstructs category icons and colors from saved data.
+   * Uses File System Access API if available, otherwise falls back to file input.
    */
   const handleOpen = async () => {
+    console.log('handleOpen called', { hasUnsavedChanges, currentView });
+    
     const executeOpen = async () => {
+      console.log('executeOpen called');
       setConfirmationModal(prev => ({ ...prev, isOpen: false }));
-      
+
       try {
-        // Show file picker
-        const [handle] = await window.showOpenFilePicker({
-          types: [
-            {
-              description: 'FFE Budget Files',
-              accept: { 'application/json': ['.ffe'] }
-            }
-          ],
-          multiple: false
-        });
-  
-        // Read file contents
-        const file = await handle.getFile();
-        const contents = await file.text();
-        const documentData = JSON.parse(contents);
-  
-        // Validate document structure
-        if (!documentData.projectInfo || !documentData.categories) {
-          throw new Error('Invalid file format');
+        // Check if File System Access API is supported
+        if (typeof window.showOpenFilePicker === 'function') {
+          // Show file picker
+          const [handle] = await window.showOpenFilePicker({
+            types: [
+              {
+                description: 'FFE Budget Files',
+                accept: { 'application/json': ['.ffe'] }
+              }
+            ],
+            multiple: false
+          });
+
+          // Read file contents
+          const file = await handle.getFile();
+          const contents = await file.text();
+          processFileContents(contents, handle);
+
+        } else {
+          // Fallback to hidden file input
+          console.log('File System Access API not supported, using fallback');
+          fileInputRef.current?.click();
         }
-  
-        // Icon mapping for reconstructing categories
-        const iconMap = {
-          'foh': { icon: Armchair, color: 'text-blue-600' },
-          'custom': { icon: Lightbulb, color: 'text-amber-600' },
-          'wayfinding': { icon: Signpost, color: 'text-purple-600' },
-          'exterior': { icon: TreePine, color: 'text-emerald-600' },
-          'fees': { icon: Briefcase, color: 'text-gray-600' }
-        };
-  
-        // Reconstruct categories with icons and sanitize items
-        const loadedCategories = (Array.isArray(documentData.categories) ? documentData.categories : []).map(cat => ({
-          ...cat,
-          icon: iconMap[cat.id]?.icon || Layout,
-          color: cat.color || iconMap[cat.id]?.color || 'text-gray-600',
-          // Sanitize items: ensure it's an array and flatten if nested (fix for previous bug)
-          items: Array.isArray(cat.items)
-            ? cat.items.flat().map(item => ({
-              ...item,
-              // Ensure numeric values are numbers
-              qty: Number(item.qty) || 0,
-              unitPrice: Number(item.unitPrice) || 0,
-              isTaxable: item.isTaxable !== false, // Default to true
-              // Add specs field for backward compatibility with old files
-              specs: item.specs || { detailedDescription: '', attachments: [] }
-            }))
-            : []
-        }));
-  
-        // Load data into state with backward compatibility
-        const loadedProjectInfo = {
-          ...documentData.projectInfo,
-          // Add default terms if not present in old files
-          terms: documentData.projectInfo.terms || [
-            "1. Estimates are valid for 30 days from date of issue.",
-            "2. Freight and delivery charges are estimated and will be billed at actual cost.",
-            "3. A formal quote and proposal will be provided. This is a preliminary budgeting tool only."
-          ]
-        };
-  
-        setProjectInfo(loadedProjectInfo);
-        setCategories(loadedCategories);
-        setFileHandle(handle);
-        setHasUnsavedChanges(false);
-        setCurrentView('budget');
-  
-        // alert('Document loaded successfully!'); // Removed alert for smoother UX
       } catch (error) {
         if (error.name !== 'AbortError') {
           console.error('Open error:', error);
@@ -1002,7 +1148,7 @@ export default function App() {
       return;
     }
 
-    executeOpen();
+    await executeOpen();
   };
 
   /**
@@ -1023,7 +1169,7 @@ export default function App() {
 
     // Build CSV content
     let csvContent = [];
-    
+
     // Project Header
     csvContent.push(['Project Budget Export']);
     csvContent.push(['Project Name', escapeCSV(projectInfo.name)]);
@@ -1055,7 +1201,7 @@ export default function App() {
         ];
         csvContent.push(row);
       });
-      
+
       // Category Subtotal
       const catTotal = totals.categoryTotals[cat.id] || 0;
       csvContent.push(['', '', '', '', '', 'Subtotal', catTotal, '', '', '', '']);
@@ -1170,13 +1316,13 @@ export default function App() {
 
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
-      
+
       if (typeof index === 'number' && index >= 0 && index <= cat.items.length) {
         const newItems = [...cat.items];
         newItems.splice(index, 0, newItem);
         return { ...cat, items: newItems };
       }
-      
+
       return { ...cat, items: [...cat.items, newItem] };
     }));
   };
@@ -1192,14 +1338,14 @@ export default function App() {
   const moveItem = (catId, index, direction) => {
     setCategories(prev => prev.map(cat => {
       if (cat.id !== catId) return cat;
-      
+
       const newItems = [...cat.items];
       if (direction === 'up' && index > 0) {
         [newItems[index], newItems[index - 1]] = [newItems[index - 1], newItems[index]];
       } else if (direction === 'down' && index < newItems.length - 1) {
         [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
       }
-      
+
       return { ...cat, items: newItems };
     }));
   };
@@ -1266,7 +1412,7 @@ export default function App() {
         { id: Date.now(), mfr: '', desc: '', dimensions: '', qty: 0, unitPrice: 0, leadTime: '', status: 'Draft', isTaxable: false, notes: '', specs: { detailedDescription: '', attachments: [] } }
       ]
     };
-    
+
     setCategories(prev => {
       if (typeof index === 'number' && index >= 0 && index <= prev.length) {
         const newCategories = [...prev];
@@ -1300,7 +1446,7 @@ export default function App() {
    */
   const removeCategory = (catId) => {
     const category = categories.find(cat => cat.id === catId);
-    
+
     setConfirmationModal({
       isOpen: true,
       title: 'Delete Section',
@@ -1523,6 +1669,13 @@ export default function App() {
                 v1.0.0 • Pat Ryan Things LLC
               </div>
               <button
+                onClick={() => setShowSettingsModal(true)}
+                className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings size={20} />
+              </button>
+              <button
                 onClick={() => setIsDarkMode(!isDarkMode)}
                 className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -1532,6 +1685,16 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Hidden File Input for Fallback */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileInputChange}
+          accept=".ffe,application/json"
+          className="hidden"
+          style={{ display: 'none' }}
+        />
       </div>
     );
   }
@@ -1543,11 +1706,11 @@ export default function App() {
       {/* Hidden when printing, provides app branding and file/print functionality */}
       <div className="bg-slate-900 text-white shadow-lg print:hidden sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-          
+
           {/* Branding */}
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-900/50">
-               <Layout className="text-white h-5 w-5" />
+              <Layout className="text-white h-5 w-5" />
             </div>
             <div>
               <h1 className="text-lg font-bold tracking-tight flex items-center gap-1">
@@ -1559,97 +1722,100 @@ export default function App() {
           </div>
 
           {/* Center - Auto Save Status */}
-           {lastAutoSave && (
-                <div className="hidden md:flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-full">
-                  <Save size={12} className="text-emerald-400" />
-                  <span>Auto-saved {lastAutoSave}</span>
-                </div>
-           )}
+          {lastAutoSave && (
+            <div className="hidden md:flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-full">
+              <Save size={12} className="text-emerald-400" />
+              <span>Auto-saved {lastAutoSave}</span>
+            </div>
+          )}
 
           {/* Right - Menu */}
           <div className="relative">
-            <button 
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className={`p-2 rounded-lg transition-all duration-200 ${isMenuOpen ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 text-slate-300 hover:text-white'}`}
-                title="Menu"
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={`p-2 rounded-lg transition-all duration-200 ${isMenuOpen ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 text-slate-300 hover:text-white'}`}
+              title="Menu"
             >
-                <Menu size={24} />
+              <Menu size={24} />
             </button>
 
             {isMenuOpen && (
-                <>
+              <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)}></div>
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                    
-                    {/* File Operations */}
-                    <div className="p-2">
-                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">File</div>
-                        <button onClick={() => { handleNewDocument(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <FileText size={16} className="text-blue-500" /> New Project
+
+                  {/* File Operations */}
+                  <div className="p-2">
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">File</div>
+                    <button onClick={() => { handleNewDocument(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <FileText size={16} className="text-blue-500" /> New Project
+                    </button>
+                    <button onClick={() => { handleOpen(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <FolderOpen size={16} className="text-amber-500" /> Open Existing
+                    </button>
+                    <button onClick={() => { handleSave(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <Save size={16} className="text-emerald-500" /> Save Project
+                    </button>
+                    <button onClick={() => { handleSaveAs(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <Copy size={16} className="text-emerald-500" /> Save As...
+                    </button>
+                    <button onClick={() => { handleExportCSV(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <FileSpreadsheet size={16} className="text-green-600" /> Export to Excel (CSV)
+                    </button>
+                  </div>
+
+                  <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
+
+                  {/* View & Tools */}
+                  <div className="p-2">
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">View & Tools</div>
+                    <button onClick={() => { setCurrentView('specbook'); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <Book size={16} className="text-indigo-500" /> Spec Book View
+                    </button>
+                    <button onClick={() => { handlePrint(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <Printer size={16} className="text-gray-500" /> Print / Export PDF
+                    </button>
+                    <button onClick={() => { setShowSettingsModal(true); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      <Settings size={16} className="text-purple-500" /> API Settings
+                    </button>
+                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                      {isDarkMode ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-indigo-400" />}
+                      {isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                    </button>
+                  </div>
+
+                  <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
+
+                  {/* Column Visibility */}
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">Visible Columns</div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {[
+                        { id: 'mfr', label: 'Vendor' },
+                        { id: 'dimensions', label: 'Dimensions' },
+                        { id: 'leadTime', label: 'Lead Time' },
+                        { id: 'status', label: 'Status' },
+                        { id: 'qty', label: 'Quantity' },
+                        { id: 'unitPrice', label: 'Unit Price' },
+                        { id: 'total', label: 'Total' },
+                        { id: 'tax', label: 'Taxable' },
+                        { id: 'notes', label: 'Notes' }
+                      ].map(col => (
+                        <button
+                          key={col.id}
+                          onClick={() => toggleColumn(col.id)}
+                          className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors ${visibleColumns[col.id] ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                          <div className={`w-3 h-3 rounded-sm border flex items-center justify-center ${visibleColumns[col.id] ? 'border-blue-500 bg-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                            {visibleColumns[col.id] && <div className="w-1.5 h-1.5 bg-white rounded-[1px]"></div>}
+                          </div>
+                          {col.label}
                         </button>
-                        <button onClick={() => { handleOpen(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <FolderOpen size={16} className="text-amber-500" /> Open Existing
-                        </button>
-                        <button onClick={() => { handleSave(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <Save size={16} className="text-emerald-500" /> Save Project
-                        </button>
-                        <button onClick={() => { handleSaveAs(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <Copy size={16} className="text-emerald-500" /> Save As...
-                        </button>
-                        <button onClick={() => { handleExportCSV(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <FileSpreadsheet size={16} className="text-green-600" /> Export to Excel (CSV)
-                        </button>
+                      ))}
                     </div>
-
-                    <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
-
-                    {/* View & Tools */}
-                    <div className="p-2">
-                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">View & Tools</div>
-                        <button onClick={() => { setCurrentView('specbook'); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <Book size={16} className="text-indigo-500" /> Spec Book View
-                        </button>
-                        <button onClick={() => { handlePrint(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            <Printer size={16} className="text-gray-500" /> Print / Export PDF
-                        </button>
-                        <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                            {isDarkMode ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-indigo-400" />} 
-                            {isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                        </button>
-                    </div>
-
-                    <div className="h-px bg-gray-100 dark:bg-gray-700 mx-2"></div>
-
-                    {/* Column Visibility */}
-                    <div className="p-2 bg-gray-50 dark:bg-gray-800/50">
-                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2">Visible Columns</div>
-                        <div className="grid grid-cols-2 gap-1">
-                            {[
-                                { id: 'mfr', label: 'Vendor' },
-                                { id: 'dimensions', label: 'Dimensions' },
-                                { id: 'leadTime', label: 'Lead Time' },
-                                { id: 'status', label: 'Status' },
-                                { id: 'qty', label: 'Quantity' },
-                                { id: 'unitPrice', label: 'Unit Price' },
-                                { id: 'total', label: 'Total' },
-                                { id: 'tax', label: 'Taxable' },
-                                { id: 'notes', label: 'Notes' }
-                            ].map(col => (
-                                <button
-                                    key={col.id}
-                                    onClick={() => toggleColumn(col.id)}
-                                    className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors ${visibleColumns[col.id] ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                >
-                                    <div className={`w-3 h-3 rounded-sm border flex items-center justify-center ${visibleColumns[col.id] ? 'border-blue-500 bg-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
-                                        {visibleColumns[col.id] && <div className="w-1.5 h-1.5 bg-white rounded-[1px]"></div>}
-                                    </div>
-                                    {col.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                  </div>
                 </div>
-                </>
+              </>
             )}
           </div>
         </div>
@@ -1813,10 +1979,10 @@ export default function App() {
                   placeholder="Company Address"
                   style={{ outline: 'none', minHeight: 'auto' }}
                 />
-                
+
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-500 print:text-gray-600">
-                   {/* Phone */}
-                   <input
+                  {/* Phone */}
+                  <input
                     type="text"
                     value={projectInfo.companyPhone}
                     onChange={(e) => handleProjectUpdate('companyPhone', e.target.value)}
@@ -1824,26 +1990,26 @@ export default function App() {
                     placeholder="Phone"
                     style={{ outline: 'none' }}
                   />
-                  
+
                   {/* Email with Mailto */}
                   <div className="flex items-center group/email relative">
                     <span className="text-gray-300 mr-2">•</span>
                     <input
-                        type="email"
-                        value={projectInfo.companyEmail}
-                        onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
-                        className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 bg-transparent w-40"
-                        placeholder="Email"
-                        style={{ outline: 'none' }}
+                      type="email"
+                      value={projectInfo.companyEmail}
+                      onChange={(e) => handleProjectUpdate('companyEmail', e.target.value)}
+                      className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 bg-transparent w-40"
+                      placeholder="Email"
+                      style={{ outline: 'none' }}
                     />
                     {projectInfo.companyEmail && (
-                        <a 
-                            href={`mailto:${projectInfo.companyEmail}`}
-                            className="ml-1 opacity-0 group-hover/email:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity print:hidden"
-                            title="Send Email"
-                        >
-                            <ExternalLink size={12} />
-                        </a>
+                      <a
+                        href={`mailto:${projectInfo.companyEmail}`}
+                        className="ml-1 opacity-0 group-hover/email:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity print:hidden"
+                        title="Send Email"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
                     )}
                   </div>
 
@@ -1851,23 +2017,23 @@ export default function App() {
                   <div className="flex items-center group/web relative">
                     <span className="text-gray-300 mr-2">•</span>
                     <input
-                        type="text"
-                        value={projectInfo.companyWebsite}
-                        onChange={(e) => handleProjectUpdate('companyWebsite', e.target.value)}
-                        className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 bg-transparent w-40"
-                        placeholder="Website"
-                        style={{ outline: 'none' }}
+                      type="text"
+                      value={projectInfo.companyWebsite}
+                      onChange={(e) => handleProjectUpdate('companyWebsite', e.target.value)}
+                      className="border-none focus:ring-2 focus:ring-blue-500 rounded px-1 py-0 bg-transparent w-40"
+                      placeholder="Website"
+                      style={{ outline: 'none' }}
                     />
                     {projectInfo.companyWebsite && (
-                        <a 
-                            href={projectInfo.companyWebsite.startsWith('http') ? projectInfo.companyWebsite : `https://${projectInfo.companyWebsite}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-1 opacity-0 group-hover/web:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity print:hidden"
-                            title="Open Website"
-                        >
-                            <ExternalLink size={12} />
-                        </a>
+                      <a
+                        href={projectInfo.companyWebsite.startsWith('http') ? projectInfo.companyWebsite : `https://${projectInfo.companyWebsite}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 opacity-0 group-hover/web:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity print:hidden"
+                        title="Open Website"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
                     )}
                   </div>
                 </div>
@@ -2008,7 +2174,7 @@ export default function App() {
           {categories.map((category, index) => (
             <React.Fragment key={category.id}>
               {/* Insert Section Divider */}
-              <div 
+              <div
                 className="print:hidden h-4 hover:h-12 transition-all duration-200 flex items-center justify-center group/divider cursor-pointer relative z-10 my-1"
                 onClick={() => addCategory(index)}
                 title="Insert New Section Here"
@@ -2021,283 +2187,291 @@ export default function App() {
               </div>
 
               <div className="break-inside-avoid group print:mb-8">
-              <Card className="overflow-hidden">
-                <SectionHeader
-                  icon={category.icon}
-                  title={category.title}
-                  total={formatCurrency(totals.categoryTotals[category.id])}
-                  colorClass={category.color}
-                  onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
-                  onDelete={() => removeCategory(category.id)}
-                />
+                <Card className="overflow-hidden">
+                  <SectionHeader
+                    icon={category.icon}
+                    title={category.title}
+                    total={formatCurrency(totals.categoryTotals[category.id])}
+                    colorClass={category.color}
+                    onTitleChange={(newTitle) => updateCategoryTitle(category.id, newTitle)}
+                    onDelete={() => removeCategory(category.id)}
+                  />
 
-                {/* Line Items Table */}
-                {/* Responsive table with inline editing and dynamic column widths */}
-                <div className="overflow-x-auto">
-                  <table style={{ width: '100%', fontSize: '14px', tableLayout: 'auto', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase">
-                        <th style={{ padding: '12px 16px', width: '40px', textAlign: 'left' }}>#</th>
-                        {visibleColumns.status && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'center' }}>Status</th>}
-                        {visibleColumns.mfr && <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Vendor</th>}
-                        <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
-                        {visibleColumns.dimensions && <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>}
-                        {visibleColumns.qty && <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>}
-                        {visibleColumns.unitPrice && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>}
-                        {visibleColumns.total && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>}
-                        {visibleColumns.tax && <th style={{ padding: '12px 16px', width: '60px', textAlign: 'center' }}>Tax</th>}
-                        {visibleColumns.leadTime && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>}
-                        {visibleColumns.notes && <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>}
-                        <th style={{ padding: '12px 16px', width: '90px', textAlign: 'center' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                      {/* Map through each line item in category */}
-                      {category.items.map((item, index) => (
-                        <React.Fragment key={item.id}>
-                          {/* Insert Row Divider */}
-                          <tr className="print:hidden h-0 hover:h-auto group/divider">
-                            <td colSpan="11" className="p-0 border-none">
-                              <div 
-                                className="h-2 hover:h-8 transition-all duration-200 flex items-center justify-center cursor-pointer relative z-10 -my-1"
-                                onClick={() => addItem(category.id, index)}
-                                title="Insert New Row Here"
-                              >
-                                <div className="absolute w-full h-px bg-transparent group-hover/divider:bg-blue-300 dark:group-hover/divider:bg-blue-700 transition-colors"></div>
-                                <button className="bg-gray-50 dark:bg-gray-800 text-gray-400 group-hover/divider:text-blue-600 dark:group-hover/divider:text-blue-400 group-hover/divider:bg-white dark:group-hover/divider:bg-gray-800 px-2 py-0.5 rounded-full transition-all transform scale-0 group-hover/divider:scale-100 opacity-0 group-hover/divider:opacity-100 flex items-center gap-1 border border-transparent group-hover/divider:border-blue-200 dark:group-hover/divider:border-blue-700 shadow-sm z-20 text-[10px] font-bold uppercase tracking-wide">
-                                  <Plus size={10} />
-                                  <span>Insert Row</span>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
-                          {/* Row number (1-indexed for user readability) */}
-                          <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
-                          {/* Status field */}
-                          {visibleColumns.status && (
-                          <td className="px-4 py-2">
-                            <StatusSelector
-                              value={item.status || 'Draft'}
-                              onChange={(val) => updateItem(category.id, item.id, 'status', val)}
-                            />
-                          </td>
-                          )}
-                          {/* Manufacturer/Vendor field */}
-                          {visibleColumns.mfr && (
-                          <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
-                            <AutoResizeTextarea
-                              style={{
-                                width: '100%',
-                                backgroundColor: 'transparent',
-                                border: '1px solid transparent',
-                                borderRadius: '4px',
-                                padding: '4px',
-                                fontSize: '14px',
-                                fontWeight: '500',
-                                fontFamily: 'inherit',
-                                lineHeight: '1.5'
-                              }}
-                              className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
-                              value={item.mfr}
-                              onChange={(e) => updateItem(category.id, item.id, 'mfr', e.target.value)}
-                              placeholder="Vendor Name"
-                            />
-                          </td>
-                          )}
-                          {/* Item description field */}
-                          <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
-                            <AutoResizeTextarea
-                              style={{
-                                width: '100%',
-                                backgroundColor: 'transparent',
-                                border: '1px solid transparent',
-                                borderRadius: '4px',
-                                padding: '4px',
-                                fontSize: '14px',
-                                fontFamily: 'inherit',
-                                lineHeight: '1.5'
-                              }}
-                              className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
-                              value={item.desc}
-                              onChange={(e) => updateItem(category.id, item.id, 'desc', e.target.value)}
-                              placeholder="Item Description"
-                            />
-                          </td>
-                          {/* Dimensions field */}
-                          {visibleColumns.dimensions && (
-                          <td className="px-4 py-2 align-top">
-                            <AutoResizeTextarea
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
-                              value={item.dimensions}
-                              onChange={(e) => updateItem(category.id, item.id, 'dimensions', e.target.value)}
-                              placeholder='Dimensions'
-                            />
-                          </td>
-                          )}
-                          {/* Quantity field - highlighted with blue background */}
-                          {visibleColumns.qty && (
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              className="w-full bg-blue-50/50 dark:bg-blue-900/20 border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-center font-bold text-gray-900 dark:text-white"
-                              value={item.qty}
-                              onChange={(e) => updateItem(category.id, item.id, 'qty', parseFloat(e.target.value) || 0)}
-                            />
-                          </td>
-                          )}
-                          {/* Unit price field with dollar sign prefix */}
-                          {visibleColumns.unitPrice && (
-                          <td className="px-4 py-2">
-                            <div className="relative">
-                              <span className="absolute left-1 top-1 text-gray-400 text-xs">$</span>
-                              <input
-                                type="number"
-                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 pl-4 text-right text-gray-600 dark:text-gray-300"
-                                value={item.unitPrice}
-                                onChange={(e) => updateItem(category.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              />
-                            </div>
-                          </td>
-                          )}
-                          {/* Calculated total for this line (qty × unit price) */}
-                          {visibleColumns.total && (
-                          <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white bg-gray-50/50 dark:bg-gray-700/30">
-                            {formatCurrency(item.qty * item.unitPrice)}
-                          </td>
-                          )}
-                          {/* Tax Toggle */}
-                          {visibleColumns.tax && (
-                            <td className="px-4 py-2 text-center">
-                              <input
-                                type="checkbox"
-                                checked={item.isTaxable !== false}
-                                onChange={(e) => updateItem(category.id, item.id, 'isTaxable', e.target.checked)}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                title="Toggle Taxable Status"
-                              />
-                            </td>
-                          )}
-                          {/* Lead time field */}
-                          {visibleColumns.leadTime && (
-                          <td className="px-4 py-2 align-top">
-                            <AutoResizeTextarea
-                              className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
-                              value={item.leadTime}
-                              onChange={(e) => updateItem(category.id, item.id, 'leadTime', e.target.value)}
-                              placeholder='L/T'
-                            />
-                          </td>
-                          )}
-                          {/* Notes field - for finish, color, or special instructions */}
-                          {visibleColumns.notes && (
-                          <td className="px-4 py-2 align-middle">
-                            <div className="flex flex-col items-center justify-center space-y-2">
-                              <AutoResizeTextarea
-                                className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-900 dark:text-gray-100 text-center placeholder-gray-300"
-                                value={item.notes}
-                                onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
-                                placeholder="Finish / Note"
-                              />
-                              <button
-                                onClick={() => setSpecEditorState({ isOpen: true, item, categoryId: category.id })}
-                                className={`flex items-center gap-1 text-xs rounded px-2 py-1 transition print:hidden ${item.specs?.detailedDescription || item.specs?.attachments?.length > 0
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                  }`}
-                                title="View or edit detailed specifications"
-                              >
-                                <FileText size={12} />
-                                <span>{item.specs?.detailedDescription || item.specs?.attachments?.length > 0 ? 'View Specs' : 'Add Specs'}</span>
-                                {item.specs?.attachments?.length > 0 && (
-                                  <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-blue-600 text-white rounded-full">
-                                    {item.specs.attachments.length}
-                                  </span>
-                                )}
-                              </button>
-                              {(item.specs?.detailedDescription || item.specs?.attachments?.length > 0) && (
-                                <div className="hidden print:block text-xs text-gray-900 font-bold mt-1">
-                                  (See Spec Book)
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          )}
-                          {/* Delete button - subtle trash icon, hidden when printing */}
-                          <td style={{
-                            padding: '8px',
-                            textAlign: 'center',
-                            display: 'table-cell'
-                          }}>
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  removeItem(category.id, item.id);
-                                }}
-                                aria-label="Delete item"
-                                title="Delete this item"
-                                type="button"
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  padding: '4px',
-                                  border: 'none',
-                                  background: 'transparent',
-                                  cursor: 'pointer',
-                                  color: '#9ca3af'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color = '#ef4444';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color = '#9ca3af';
-                                }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                              <div className="flex flex-col gap-1">
-                                <button
-                                  onClick={() => moveItem(category.id, index, 'up')}
-                                  disabled={index === 0}
-                                  className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
-                                  title="Move Up"
-                                >
-                                  <ArrowUp size={12} />
-                                </button>
-                                <button
-                                  onClick={() => moveItem(category.id, index, 'down')}
-                                  disabled={index === category.items.length - 1}
-                                  className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
-                                  title="Move Down"
-                                >
-                                  <ArrowDown size={12} />
-                                </button>
-                              </div>
-                            </div>
-                          </td>
+                  {/* Line Items Table */}
+                  {/* Responsive table with inline editing and dynamic column widths */}
+                  <div className="overflow-x-auto">
+                    <table style={{ width: '100%', fontSize: '14px', tableLayout: 'auto', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase">
+                          <th style={{ padding: '12px 16px', width: '40px', textAlign: 'left' }}>#</th>
+                          {visibleColumns.status && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'center' }}>Status</th>}
+                          {visibleColumns.mfr && <th style={{ padding: '12px 16px', minWidth: '120px', textAlign: 'left' }}>Vendor</th>}
+                          <th style={{ padding: '12px 16px', minWidth: '200px', textAlign: 'left' }}>Description</th>
+                          {visibleColumns.dimensions && <th style={{ padding: '12px 16px', width: '120px', textAlign: 'left' }}>Dimensions</th>}
+                          {visibleColumns.qty && <th style={{ padding: '12px 16px', width: '80px', textAlign: 'center' }}>Qty</th>}
+                          {visibleColumns.unitPrice && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Unit Price</th>}
+                          {visibleColumns.total && <th style={{ padding: '12px 16px', width: '110px', textAlign: 'right' }}>Total</th>}
+                          {visibleColumns.tax && <th style={{ padding: '12px 16px', width: '60px', textAlign: 'center' }}>Tax</th>}
+                          {visibleColumns.leadTime && <th style={{ padding: '12px 16px', width: '100px', textAlign: 'left' }}>Lead Time</th>}
+                          {visibleColumns.notes && <th style={{ padding: '12px 16px', width: '140px', textAlign: 'left' }}>Notes</th>}
+                          <th style={{ padding: '12px 16px', width: '90px', textAlign: 'center' }}>Actions</th>
                         </tr>
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        {/* Map through each line item in category */}
+                        {category.items.map((item, index) => (
+                          <React.Fragment key={item.id}>
+                            {/* Insert Row Divider */}
+                            <tr className="print:hidden h-0 hover:h-auto group/divider">
+                              <td colSpan="11" className="p-0 border-none">
+                                <div
+                                  className="h-2 hover:h-8 transition-all duration-200 flex items-center justify-center cursor-pointer relative z-10 -my-1"
+                                  onClick={() => addItem(category.id, index)}
+                                  title="Insert New Row Here"
+                                >
+                                  <div className="absolute w-full h-px bg-transparent group-hover/divider:bg-blue-300 dark:group-hover/divider:bg-blue-700 transition-colors"></div>
+                                  <button className="bg-gray-50 dark:bg-gray-800 text-gray-400 group-hover/divider:text-blue-600 dark:group-hover/divider:text-blue-400 group-hover/divider:bg-white dark:group-hover/divider:bg-gray-800 px-2 py-0.5 rounded-full transition-all transform scale-0 group-hover/divider:scale-100 opacity-0 group-hover/divider:opacity-100 flex items-center gap-1 border border-transparent group-hover/divider:border-blue-200 dark:group-hover/divider:border-blue-700 shadow-sm z-20 text-[10px] font-bold uppercase tracking-wide">
+                                    <Plus size={10} />
+                                    <span>Insert Row</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
 
-                {/* Add Item Button - Footer of the card */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-100 dark:border-gray-700 rounded-b-lg print:hidden">
-                  <button
-                    onClick={() => addItem(category.id)}
-                    className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-sm"
-                  >
-                    <Plus size={16} />
-                    Add {category.title.split('|')[0].trim()} Item
-                  </button>
-                </div>
-              </Card>
-            </div>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
+                              {/* Row number (1-indexed for user readability) */}
+                              <td className="px-4 py-3 text-gray-400 font-mono text-xs">{index + 1}</td>
+                              {/* Status field */}
+                              {visibleColumns.status && (
+                                <td className="px-4 py-2">
+                                  <StatusSelector
+                                    value={item.status || 'Draft'}
+                                    onChange={(val) => updateItem(category.id, item.id, 'status', val)}
+                                  />
+                                </td>
+                              )}
+                              {/* Manufacturer/Vendor field */}
+                              {visibleColumns.mfr && (
+                                <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
+                                  <AutoResizeTextarea
+                                    style={{
+                                      width: '100%',
+                                      backgroundColor: 'transparent',
+                                      border: '1px solid transparent',
+                                      borderRadius: '4px',
+                                      padding: '4px',
+                                      fontSize: '14px',
+                                      fontWeight: '500',
+                                      fontFamily: 'inherit',
+                                      lineHeight: '1.5'
+                                    }}
+                                    className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
+                                    value={item.mfr}
+                                    onChange={(e) => updateItem(category.id, item.id, 'mfr', e.target.value)}
+                                    placeholder="Vendor Name"
+                                  />
+                                </td>
+                              )}
+                              {/* Item description field */}
+                              <td style={{ padding: '8px 16px', verticalAlign: 'top' }}>
+                                <AutoResizeTextarea
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: 'transparent',
+                                    border: '1px solid transparent',
+                                    borderRadius: '4px',
+                                    padding: '4px',
+                                    fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                    lineHeight: '1.5'
+                                  }}
+                                  className="text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-0"
+                                  value={item.desc}
+                                  onChange={(e) => updateItem(category.id, item.id, 'desc', e.target.value)}
+                                  placeholder="Item Description"
+                                />
+                              </td>
+                              {/* Dimensions field */}
+                              {visibleColumns.dimensions && (
+                                <td className="px-4 py-2 align-top">
+                                  <AutoResizeTextarea
+                                    className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
+                                    value={item.dimensions}
+                                    onChange={(e) => updateItem(category.id, item.id, 'dimensions', e.target.value)}
+                                    placeholder='Dimensions'
+                                  />
+                                </td>
+                              )}
+                              {/* Quantity field - highlighted with blue background */}
+                              {visibleColumns.qty && (
+                                <td className="px-4 py-2">
+                                  <input
+                                    type="number"
+                                    className="w-full bg-blue-50/50 dark:bg-blue-900/20 border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-center font-bold text-gray-900 dark:text-white"
+                                    value={item.qty}
+                                    onChange={(e) => updateItem(category.id, item.id, 'qty', parseFloat(e.target.value) || 0)}
+                                  />
+                                </td>
+                              )}
+                              {/* Unit price field with dollar sign prefix */}
+                              {visibleColumns.unitPrice && (
+                                <td className="px-4 py-2">
+                                  <div className="relative flex items-center">
+                                    <span className="absolute left-2 text-gray-400 text-xs">$</span>
+                                    <input
+                                      type="number"
+                                      className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 pl-5 pr-7 text-right text-gray-600 dark:text-gray-300"
+                                      value={item.unitPrice}
+                                      onChange={(e) => updateItem(category.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                    />
+                                    <button
+                                      onClick={(e) => handlePriceSearch(e, category.id, item)}
+                                      className="absolute right-1 p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      title="Search Market Price"
+                                      tabIndex={-1}
+                                    >
+                                      <Search size={12} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                              {/* Calculated total for this line (qty × unit price) */}
+                              {visibleColumns.total && (
+                                <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white bg-gray-50/50 dark:bg-gray-700/30">
+                                  {formatCurrency(item.qty * item.unitPrice)}
+                                </td>
+                              )}
+                              {/* Tax Toggle */}
+                              {visibleColumns.tax && (
+                                <td className="px-4 py-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.isTaxable !== false}
+                                    onChange={(e) => updateItem(category.id, item.id, 'isTaxable', e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    title="Toggle Taxable Status"
+                                  />
+                                </td>
+                              )}
+                              {/* Lead time field */}
+                              {visibleColumns.leadTime && (
+                                <td className="px-4 py-2 align-top">
+                                  <AutoResizeTextarea
+                                    className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-600 dark:text-gray-300 placeholder-gray-300"
+                                    value={item.leadTime}
+                                    onChange={(e) => updateItem(category.id, item.id, 'leadTime', e.target.value)}
+                                    placeholder='L/T'
+                                  />
+                                </td>
+                              )}
+                              {/* Notes field - for finish, color, or special instructions */}
+                              {visibleColumns.notes && (
+                                <td className="px-4 py-2 align-middle">
+                                  <div className="flex flex-col items-center justify-center space-y-2">
+                                    <AutoResizeTextarea
+                                      className="w-full bg-transparent border-transparent focus:border-blue-500 focus:ring-0 rounded text-sm p-1 text-gray-900 dark:text-gray-100 text-center placeholder-gray-300"
+                                      value={item.notes}
+                                      onChange={(e) => updateItem(category.id, item.id, 'notes', e.target.value)}
+                                      placeholder="Finish / Note"
+                                    />
+                                    <button
+                                      onClick={() => setSpecEditorState({ isOpen: true, item, categoryId: category.id })}
+                                      className={`flex items-center gap-1 text-xs rounded px-2 py-1 transition print:hidden ${item.specs?.detailedDescription || item.specs?.attachments?.length > 0
+                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                        }`}
+                                      title="View or edit detailed specifications"
+                                    >
+                                      <FileText size={12} />
+                                      <span>{item.specs?.detailedDescription || item.specs?.attachments?.length > 0 ? 'View Specs' : 'Add Specs'}</span>
+                                      {item.specs?.attachments?.length > 0 && (
+                                        <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-blue-600 text-white rounded-full">
+                                          {item.specs.attachments.length}
+                                        </span>
+                                      )}
+                                    </button>
+                                    {(item.specs?.detailedDescription || item.specs?.attachments?.length > 0) && (
+                                      <div className="hidden print:block text-xs text-gray-900 font-bold mt-1">
+                                        (See Spec Book)
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                              {/* Delete button - subtle trash icon, hidden when printing */}
+                              <td style={{
+                                padding: '8px',
+                                textAlign: 'center',
+                                display: 'table-cell'
+                              }}>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      removeItem(category.id, item.id);
+                                    }}
+                                    aria-label="Delete item"
+                                    title="Delete this item"
+                                    type="button"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      padding: '4px',
+                                      border: 'none',
+                                      background: 'transparent',
+                                      cursor: 'pointer',
+                                      color: '#9ca3af'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.color = '#ef4444';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.color = '#9ca3af';
+                                    }}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                  <div className="flex flex-col gap-1">
+                                    <button
+                                      onClick={() => moveItem(category.id, index, 'up')}
+                                      disabled={index === 0}
+                                      className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
+                                      title="Move Up"
+                                    >
+                                      <ArrowUp size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => moveItem(category.id, index, 'down')}
+                                      disabled={index === category.items.length - 1}
+                                      className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 p-0.5"
+                                      title="Move Down"
+                                    >
+                                      <ArrowDown size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Add Item Button - Footer of the card */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-100 dark:border-gray-700 rounded-b-lg print:hidden">
+                    <button
+                      onClick={() => addItem(category.id)}
+                      className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-sm"
+                    >
+                      <Plus size={16} />
+                      Add {category.title.split('|')[0].trim()} Item
+                    </button>
+                  </div>
+                </Card>
+              </div>
             </React.Fragment>
           ))}
 
@@ -2440,6 +2614,28 @@ export default function App() {
           }
         }
       `}</style>
-    </div >
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
+      <PricingPopover
+        isOpen={pricingPopover.isOpen}
+        onClose={() => setPricingPopover(prev => ({ ...prev, isOpen: false }))}
+        results={pricingPopover.results}
+        isLoading={pricingPopover.isLoading}
+        position={pricingPopover.position}
+        onSelectPrice={handlePriceSelect}
+      />
+
+      {/* Hidden File Input for Fallback */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        accept=".ffe,application/json"
+        className="hidden"
+        style={{ display: 'none' }}
+      />
+    </div>
   );
 }
